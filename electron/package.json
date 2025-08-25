@@ -1,0 +1,8 @@
+{
+  "name": "presentation-viewer",
+  "version": "1.0.0",
+  "main": "main.js",
+  "dependencies": {
+    "pdfjs-dist": "^3.11.174"
+  }
+}

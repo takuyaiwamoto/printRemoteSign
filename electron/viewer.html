@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .viewer-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .slide-content {
+            max-width: 100%;
+            max-height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide-content img {
+            max-width: 100%;
+            max-height: 100vh;
+            object-fit: contain;
+        }
+        
+        .slide-content video {
+            max-width: 100%;
+            max-height: 100vh;
+        }
+        
+        .no-content {
+            color: #666;
+            font-size: 32px;
+            text-align: center;
+        }
+        
+        .status-bar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        
+        .status-bar.connected {
+            background: rgba(40, 167, 69, 0.8);
+        }
+        
+        .status-bar.disconnected {
+            background: rgba(220, 53, 69, 0.8);
+        }
+        
+        .iframe-viewer {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .markdown-viewer {
+            width: 100%;
+            height: 100%;
+            padding: 40px;
+            color: white;
+            background: #1e1e1e;
+            overflow: auto;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+        
+        .pdf-viewer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+        }
+        
+        .pdf-page {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        .connection-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 2000;
+        }
+        
+        .connection-dialog h2 {
+            margin-bottom: 20px;
+        }
+        
+        .connection-dialog input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .connection-dialog button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        
+        .connection-dialog button:hover {
+            background: #0056b3;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="status-bar disconnected" id="statusBar">
+        未接続
+    </div>
+    
+    <div class="connection-dialog" id="connectionDialog">
+        <h2>サーバー接続設定</h2>
+        <input type="text" id="serverUrl" placeholder="サーバーURL (例: http://localhost:3001)" value="http://localhost:3001">
+        <div>
+            <button onclick="connectToServer()">接続</button>
+            <button onclick="closeConnectionDialog()">キャンセル</button>
+        </div>
+    </div>
+    
+    <div class="viewer-container" id="viewerContainer">
+        <div class="no-content">サーバーに接続してください</div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+        const { ipcRenderer } = require('electron');
+        const fs = require('fs');
+        const path = require('path');
+        const pdfjs = require('pdfjs-dist/legacy/build/pdf');
+        
+        let socket = null;
+        let currentSlide = null;
+        let videoElement = null;
+        let serverUrl = 'http://localhost:3001';
+        
+        function connectToServer() {
+            serverUrl = document.getElementById('serverUrl').value;
+            closeConnectionDialog();
+            
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            socket = io(serverUrl);
+            
+            socket.on('connect', () => {
+                updateStatus('接続済み', true);
+                console.log('Connected to server');
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('切断', false);
+                console.log('Disconnected from server');
+            });
+            
+            socket.on('slideChanged', (slideData) => {
+                displaySlide(slideData);
+            });
+            
+            socket.on('videoStateUpdate', (state) => {
+                handleVideoState(state);
+            });
+            
+            socket.on('presentationUpdate', (presentation) => {
+                if (presentation.currentSlide) {
+                    displaySlide(presentation.currentSlide);
+                }
+            });
+        }
+        
+        function closeConnectionDialog() {
+            document.getElementById('connectionDialog').classList.add('hidden');
+        }
+        
+        function updateStatus(text, isConnected) {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.textContent = text;
+            statusBar.className = `status-bar ${isConnected ? 'connected' : 'disconnected'}`;
+        }
+        
+        async function displaySlide(slide) {
+            currentSlide = slide;
+            const container = document.getElementById('viewerContainer');
+            
+            if (!slide) {
+                container.innerHTML = '<div class="no-content">スライドが選択されていません</div>';
+                return;
+            }
+            
+            const fileUrl = serverUrl + slide.path;
+            
+            switch (slide.type) {
+                case 'image':
+                    container.innerHTML = `
+                        <div class="slide-content">
+                            <img src="${fileUrl}" alt="${slide.name}">
+                        </div>
+                    `;
+                    break;
+                    
+                case 'video':
+                    container.innerHTML = `
+                        <div class="slide-content">
+                            <video id="mainVideo" src="${fileUrl}" controls></video>
+                        </div>
+                    `;
+                    setupVideo();
+                    break;
+                    
+                case 'html':
+                    container.innerHTML = `
+                        <iframe class="iframe-viewer" src="${fileUrl}"></iframe>
+                    `;
+                    break;
+                    
+                case 'markdown':
+                    try {
+                        const response = await fetch(fileUrl);
+                        const text = await response.text();
+                        container.innerHTML = `
+                            <div class="markdown-viewer">
+                                <pre style="white-space: pre-wrap;">${text}</pre>
+                            </div>
+                        `;
+                    } catch (error) {
+                        console.error('Error loading markdown:', error);
+                    }
+                    break;
+                    
+                case 'pdf':
+                    await displayPDF(fileUrl, slide.page || 1);
+                    break;
+                    
+                case 'presentation':
+                    await displayPresentation(fileUrl, slide.page || 1);
+                    break;
+                    
+                default:
+                    container.innerHTML = '<div class="no-content">サポートされていない形式です</div>';
+            }
+        }
+        
+        function setupVideo() {
+            videoElement = document.getElementById('mainVideo');
+            if (!videoElement) return;
+            
+            videoElement.addEventListener('loadedmetadata', () => {
+                console.log('Video loaded');
+            });
+        }
+        
+        function handleVideoState(state) {
+            if (!videoElement) return;
+            
+            if (state.playing) {
+                videoElement.play().catch(e => console.error('Play error:', e));
+            } else {
+                videoElement.pause();
+            }
+            
+            if (state.currentTime !== undefined && Math.abs(videoElement.currentTime - state.currentTime) > 1) {
+                videoElement.currentTime = state.currentTime;
+            }
+        }
+        
+        async function displayPDF(url, pageNum) {
+            const container = document.getElementById('viewerContainer');
+            container.innerHTML = '<div class="pdf-viewer" id="pdfViewer">PDFを読み込み中...</div>';
+            
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                
+                if (window.pdfjsLib) {
+                    pdfjsLib = window.pdfjsLib;
+                } else {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                    document.head.appendChild(script);
+                    await new Promise(resolve => script.onload = resolve);
+                    pdfjsLib = window.pdfjsLib;
+                }
+                
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const page = await pdf.getPage(pageNum);
+                
+                const scale = 2;
+                const viewport = page.getViewport({ scale });
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.className = 'pdf-page';
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+                const pdfViewer = document.getElementById('pdfViewer');
+                pdfViewer.innerHTML = '';
+                pdfViewer.appendChild(canvas);
+                
+            } catch (error) {
+                console.error('PDF display error:', error);
+                container.innerHTML = `
+                    <div class="no-content">
+                        <p>PDFの表示に失敗しました</p>
+                        <p style="font-size: 16px; margin-top: 10px;">${slide.name}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function displayPresentation(url, pageNum) {
+            const container = document.getElementById('viewerContainer');
+            
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                
+                container.innerHTML = `
+                    <div class="slide-content">
+                        <div style="color: white; text-align: center; padding: 40px;">
+                            <h2>${currentSlide.name}</h2>
+                            <p style="margin-top: 20px; font-size: 18px;">
+                                PowerPointファイルの変換機能は実装中です
+                            </p>
+                            <p style="margin-top: 10px; color: #999;">
+                                ファイルを画像形式（PNG/JPG）に変換してご利用ください
+                            </p>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Presentation display error:', error);
+                container.innerHTML = '<div class="no-content">プレゼンテーションの読み込みに失敗しました</div>';
+            }
+        }
+        
+        ipcRenderer.on('connect-server', () => {
+            document.getElementById('connectionDialog').classList.remove('hidden');
+        });
+        
+        window.onload = () => {
+            connectToServer();
+        };
+    </script>
+</body>
+</html>
