@@ -57,7 +57,6 @@ const getFileList = async () => {
       const categoryDir = path.join(uploadDir, category);
       try {
         const files = await fs.readdir(categoryDir);
-        console.log(`Category: ${category}, Files found:`, files); // デバッグログ追加
         
         for (const file of files) {
           const ext = path.extname(file).toLowerCase();
@@ -74,7 +73,6 @@ const getFileList = async () => {
               uploadedAt: stats.mtime,
               category: category
             };
-            console.log(`Adding file to ${category}:`, file); // デバッグログ追加
             
             // PDFの場合はページ数を取得
             if (ext === '.pdf') {

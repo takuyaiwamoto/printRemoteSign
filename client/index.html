@@ -313,10 +313,38 @@
         let isReceivingSlideChange = false; // 他のコントローラーからの変更受信中フラグ
         let tabCache = {}; // タブごとのスライドリストをキャッシュ
         let pdfCache = new Map(); // PDFドキュメントのキャッシュ
+        let renderQueue = []; // PDF描画キュー
+        let isRendering = false; // 描画中フラグ
+        
+        // 汚染されたキャッシュをクリアする関数
+        function clearContaminatedCache() {
+            const categoriesToCheck = ['イントロ質疑', '倉林さん', '栗原先生', '高野さん'];
+            let clearedCount = 0;
+            
+            categoriesToCheck.forEach(category => {
+                if (tabCache[category]) {
+                    const cachedSlides = tabCache[category].slides || [];
+                    const invalidSlides = cachedSlides.filter(slide => 
+                        slide.category !== category
+                    );
+                    
+                    if (invalidSlides.length > 0) {
+                        console.log(`Clearing contaminated cache for ${category}: found ${invalidSlides.length} invalid slides`);
+                        delete tabCache[category];
+                        clearedCount++;
+                    }
+                }
+            });
+            
+            if (clearedCount > 0) {
+                console.log(`Cleared ${clearedCount} contaminated cache entries`);
+            }
+        }
         
         socket.on('connect', () => {
             document.getElementById('connectionStatus').textContent = '接続状態: 接続済み';
             document.getElementById('connectionStatus').classList.remove('disconnected');
+            clearContaminatedCache();
             refreshFiles();
         });
         
@@ -327,6 +355,8 @@
         
         socket.on('filesList', (filesByCategory) => {
             availableFiles = filesByCategory;
+            // タブキャッシュをクリア（新しいファイルリストで更新）
+            tabCache = {};
             // 現在のカテゴリのファイルを表示
             switchTab(currentCategory);
         });
@@ -343,27 +373,32 @@
         // 他のコントローラーからのスライド変更を受信
         socket.on('slideChanged', (slideData) => {
             if (slideData && slideData.id) {
-                isReceivingSlideChange = true;
-                
-                // 受信したスライドに対応するインデックスを検索
-                const slideIndex = presentationSlides.findIndex(slide => slide.id === slideData.id);
-                
-                if (slideIndex !== -1) {
-                    // 対応するスライドが見つかった場合、そのスライドを選択
-                    selectSlide(slideIndex, true); // fromRemote = true で無限ループを防止
-                    console.log('Slide changed by another controller:', slideData.name);
+                // スライドが同じカテゴリの場合のみ同期
+                if (slideData.category && slideData.category === currentCategory) {
+                    isReceivingSlideChange = true;
+                    
+                    // 受信したスライドに対応するインデックスを検索
+                    const slideIndex = presentationSlides.findIndex(slide => slide.id === slideData.id);
+                    
+                    if (slideIndex !== -1) {
+                        // 対応するスライドが見つかった場合、そのスライドを選択
+                        selectSlide(slideIndex, true); // fromRemote = true で無限ループを防止
+                        console.log('Slide changed by another controller:', slideData.name);
+                    } else {
+                        // 対応するスライドが見つからない場合、直接表示のみ更新
+                        currentSlide = slideData;
+                        displaySlide(currentSlide);
+                        updateActiveSlide();
+                        console.log('Remote slide not found in current list:', slideData.name);
+                    }
+                    
+                    // フラグをリセット
+                    setTimeout(() => {
+                        isReceivingSlideChange = false;
+                    }, 100);
                 } else {
-                    // 対応するスライドが見つからない場合、直接表示のみ更新
-                    currentSlide = slideData;
-                    displaySlide(currentSlide);
-                    updateActiveSlide();
-                    console.log('Remote slide not found in current list:', slideData.name);
+                    console.log('Ignoring slide from different category:', slideData.category, 'current:', currentCategory);
                 }
-                
-                // フラグをリセット
-                setTimeout(() => {
-                    isReceivingSlideChange = false;
-                }, 100);
             }
         });
         
@@ -373,6 +408,9 @@
             pdfCache.clear();
             presentationSlides = [];
             currentSlide = null;
+            // PDFレンダリングキューをクリア
+            renderQueue = [];
+            isRendering = false;
             socket.emit('getFiles');
         }
         
@@ -425,15 +463,20 @@
                 totalSlidesElement.textContent = presentationSlides.length;
             }
             
-            // PDFサムネイルと動画サムネイルを非同期でレンダリング
-            setTimeout(() => {
-                presentationSlides.forEach((slide, index) => {
-                    if (slide.type === 'pdf' && slide.page) {
-                        renderPDFPageThumbnail(slide.path, slide.page, `pdf-thumb-${index}`);
-                    } else if (slide.type === 'video') {
-                        renderVideoThumbnail(slide.path, `video-thumb-${index}`);
+            // PDFサムネイルと動画サムネイルを順次レンダリング（競合回避）
+            setTimeout(async () => {
+                for (let index = 0; index < presentationSlides.length; index++) {
+                    const slide = presentationSlides[index];
+                    try {
+                        if (slide.type === 'pdf' && slide.page) {
+                            await renderPDFPageThumbnail(slide.path, slide.page, `pdf-thumb-${index}`);
+                        } else if (slide.type === 'video') {
+                            renderVideoThumbnail(slide.path, `video-thumb-${index}`);
+                        }
+                    } catch (error) {
+                        console.error('Error rendering thumbnail:', error);
                     }
-                });
+                }
             }, 100);
         }
         
@@ -500,6 +543,15 @@
         
         function selectSlide(index, fromRemote = false) {
             currentSlide = presentationSlides[index];
+            
+            // デバッグログ追加
+            console.log('selectSlide called:', {
+                index,
+                currentCategory,
+                slideCategory: currentSlide?.category,
+                slideName: currentSlide?.name,
+                fromRemote
+            });
             
             // 他のコントローラーからの変更でない場合のみサーバーに送信
             if (!fromRemote && !isReceivingSlideChange) {
@@ -731,8 +783,35 @@
             }
         }
         
-        // PDFページサムネイルをレンダリング（サムネイル用）
-        async function renderPDFPageThumbnail(pdfPath, pageNum, canvasId) {
+        // PDF描画キューを処理する関数
+        async function processRenderQueue() {
+            if (isRendering || renderQueue.length === 0) return;
+            
+            isRendering = true;
+            const { pdfPath, pageNum, canvasId, resolve, reject } = renderQueue.shift();
+            
+            try {
+                await renderPDFPageThumbnailInternal(pdfPath, pageNum, canvasId);
+                resolve();
+            } catch (error) {
+                reject(error);
+            } finally {
+                isRendering = false;
+                // 次のキューを処理
+                setTimeout(() => processRenderQueue(), 10);
+            }
+        }
+
+        // PDFページサムネイルをレンダリング（キューに追加）
+        function renderPDFPageThumbnail(pdfPath, pageNum, canvasId) {
+            return new Promise((resolve, reject) => {
+                renderQueue.push({ pdfPath, pageNum, canvasId, resolve, reject });
+                processRenderQueue();
+            });
+        }
+
+        // PDFページサムネイルをレンダリング（内部実装）
+        async function renderPDFPageThumbnailInternal(pdfPath, pageNum, canvasId) {
             try {
                 const canvas = document.getElementById(canvasId);
                 if (!canvas) return;
@@ -938,12 +1017,19 @@
         
         // タブ切り替え機能
         function switchTab(category) {
-            // 現在のタブのスライドをキャッシュに保存
+            // 現在のタブのスライドをキャッシュに保存（カテゴリが一致するもののみ）
             if (currentCategory && presentationSlides.length > 0) {
-                tabCache[currentCategory] = {
-                    slides: [...presentationSlides],
-                    currentSlide: currentSlide
-                };
+                // カテゴリの整合性をチェックしてから保存
+                const validSlides = presentationSlides.filter(slide => 
+                    slide.category === currentCategory
+                );
+                if (validSlides.length > 0) {
+                    tabCache[currentCategory] = {
+                        slides: [...validSlides],
+                        currentSlide: validSlides.includes(currentSlide) ? currentSlide : null
+                    };
+                    console.log('Saved to cache for category:', currentCategory, 'valid slides:', validSlides.length);
+                }
             }
             
             currentCategory = category;
@@ -965,17 +1051,38 @@
             
             // キャッシュから復元するか、新規作成
             if (tabCache[category]) {
-                // キャッシュから復元
-                presentationSlides = [...tabCache[category].slides];
-                currentSlide = tabCache[category].currentSlide;
-                renderPresentationSlides();
-                if (currentSlide) {
-                    displaySlide(currentSlide);
+                // キャッシュから復元（カテゴリの整合性をチェック）
+                const cachedSlides = tabCache[category].slides || [];
+                const validCachedSlides = cachedSlides.filter(slide => 
+                    slide.category === category
+                );
+                
+                if (validCachedSlides.length > 0 && validCachedSlides.length === cachedSlides.length) {
+                    // 全てのスライドがカテゴリに一致している場合のみ復元
+                    presentationSlides = [...validCachedSlides];
+                    currentSlide = tabCache[category].currentSlide;
+                    console.log('Restored from cache for category:', category, 'slides count:', presentationSlides.length);
+                    renderPresentationSlides();
+                    if (currentSlide && currentSlide.category === category) {
+                        displaySlide(currentSlide);
+                    }
+                } else {
+                    // キャッシュが汚染されている場合は削除して新規作成
+                    console.log('Cache contamination detected for category:', category, 'clearing cache');
+                    delete tabCache[category];
+                    presentationSlides = [];
+                    currentSlide = null;
+                    // ファイルリストから該当カテゴリのファイルを自動追加
+                    if (availableFiles[category]) {
+                        autoAddFilesToPresentation(availableFiles[category]);
+                    }
+                    renderPresentationSlides();
                 }
             } else {
                 // 新規作成
                 presentationSlides = [];
                 currentSlide = null;
+                console.log('Creating new slides for category:', category, 'available files:', availableFiles[category]?.length || 0);
                 
                 if (availableFiles[category] && availableFiles[category].length > 0) {
                     autoAddFilesToPresentation(availableFiles[category]);
@@ -985,8 +1092,8 @@
                 }
             }
             
-            // スライドリストの更新をサーバーに送信
-            socket.emit('updateSlides', presentationSlides);
+            // タブ切り替え時はサーバーに送信しない（各タブを独立させる）
+            // socket.emit('updateSlides', presentationSlides);
         }
         
         refreshFiles();
