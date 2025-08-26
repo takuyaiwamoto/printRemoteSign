@@ -151,7 +151,7 @@
     </style>
 </head>
 <body>
-    <div class="status-bar disconnected" id="statusBar">
+    <div class="status-bar disconnected hidden" id="statusBar">
         未接続
     </div>
     
@@ -191,12 +191,14 @@
             socket = io(serverUrl);
             
             socket.on('connect', () => {
-                updateStatus('接続済み', true);
+                // ステータス表示を無効化
+                // updateStatus('接続済み', true);
                 console.log('Connected to server');
             });
             
             socket.on('disconnect', () => {
-                updateStatus('切断', false);
+                // ステータス表示を無効化
+                // updateStatus('切断', false);
                 console.log('Disconnected from server');
             });
             
@@ -333,8 +335,12 @@
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const page = await pdf.getPage(pageNum);
                 
+                // ページ自体の回転情報を取得
+                const originalViewport = page.getViewport({ scale: 1 });
+                const rotation = originalViewport.rotation || 0;
+                
                 const scale = 2;
-                const viewport = page.getViewport({ scale });
+                const viewport = page.getViewport({ scale, rotation });
                 
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');

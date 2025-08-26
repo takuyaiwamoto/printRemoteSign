@@ -30,7 +30,7 @@
         
         .main-layout {
             display: grid;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr;
             grid-template-rows: auto 1fr;
             gap: 20px;
             align-items: start;
@@ -269,38 +269,28 @@
         </div>
         
         <div class="main-layout">
-            <!-- 上部左: 現在のスライド表示 -->
-            <div class="panel" style="max-width: 400px;">
+            <!-- 上部: 現在のスライド表示 -->
+            <div class="panel" style="max-width: 500px; margin: 0 auto;">
                 <h2>現在のスライド</h2>
-                <div class="preview-area" id="currentSlideArea" style="max-width: 100%; max-height: 200px;">
+                <div class="preview-area" id="currentSlideArea" style="max-width: 100%; max-height: 250px;">
                     <div class="no-content">スライドを選択してください</div>
                 </div>
             </div>
             
-            <!-- 上部右: コントロールパネル -->
-            <div class="panel">
-                <h2>コントロール</h2>
-                <div id="controlPanel">
-                    <div style="margin-bottom: 15px;">
-                        <button onclick="refreshFiles()" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">ファイルを更新</button>
-                        <button onclick="reloadAllFiles()" style="width: 100%; padding: 10px; margin-bottom: 15px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">すべて再読み込み</button>
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <h3 style="font-size: 14px; margin-bottom: 10px;">スライド操作</h3>
-                        <button onclick="previousSlide()" style="width: 48%; padding: 10px;">前へ</button>
-                        <button onclick="nextSlide()" style="width: 48%; padding: 10px;">次へ</button>
-                    </div>
-                    <div style="margin-top: 15px;">
-                        <p style="font-size: 14px; color: #666;">現在: <span id="currentSlideInfo">なし</span></p>
-                        <p style="font-size: 14px; color: #666;">総数: <span id="totalSlides">0</span> スライド</p>
-                    </div>
-                </div>
-            </div>
-            
             <!-- 下部: プレゼンテーションリスト（メインUI） -->
-            <div class="panel" style="grid-column: 1 / -1;">
+            <div class="panel">
                 <h2>プレゼンテーション スライド一覧</h2>
-                <div class="presentation-slides" id="presentationSlides" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 500px; overflow-y: auto; padding: 10px;">
+                
+                <!-- タブナビゲーション -->
+                <div class="tab-navigation" style="display: flex; margin-bottom: 20px; border-bottom: 2px solid #dee2e6;">
+                    <button class="tab-button active" data-category="イントロ質疑" onclick="switchTab('イントロ質疑')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 3px solid #007bff; color: #007bff; font-weight: bold;">イントロ質疑</button>
+                    <button class="tab-button" data-category="倉林さん" onclick="switchTab('倉林さん')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; color: #666;">倉林さん</button>
+                    <button class="tab-button" data-category="栗原先生" onclick="switchTab('栗原先生')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; color: #666;">栗原先生</button>
+                    <button class="tab-button" data-category="高野さん" onclick="switchTab('高野さん')" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; color: #666;">高野さん</button>
+                </div>
+                
+                <!-- スライドコンテンツエリア -->
+                <div class="presentation-slides" id="presentationSlides" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; padding: 10px;">
                     <p style="color: #999; text-align: center; grid-column: 1 / -1;">読み込み中...</p>
                 </div>
             </div>
@@ -315,10 +305,14 @@
     </script>
     <script>
         const socket = io();
-        let availableFiles = [];
+        let availableFiles = {};
         let presentationSlides = [];
         let currentSlide = null;
         let videoElement = null;
+        let currentCategory = 'イントロ質疑';
+        let isReceivingSlideChange = false; // 他のコントローラーからの変更受信中フラグ
+        let tabCache = {}; // タブごとのスライドリストをキャッシュ
+        let pdfCache = new Map(); // PDFドキュメントのキャッシュ
         
         socket.on('connect', () => {
             document.getElementById('connectionStatus').textContent = '接続状態: 接続済み';
@@ -331,12 +325,10 @@
             document.getElementById('connectionStatus').classList.add('disconnected');
         });
         
-        socket.on('filesList', (files) => {
-            availableFiles = files;
-            // 初回ロード時に自動的にすべてのファイルをプレゼンテーションリストに追加
-            if (presentationSlides.length === 0 && files.length > 0) {
-                autoAddFilesToPresentation(files);
-            }
+        socket.on('filesList', (filesByCategory) => {
+            availableFiles = filesByCategory;
+            // 現在のカテゴリのファイルを表示
+            switchTab(currentCategory);
         });
         
         socket.on('presentationUpdate', (presentation) => {
@@ -347,8 +339,40 @@
                 displaySlide(currentSlide);
             }
         });
+
+        // 他のコントローラーからのスライド変更を受信
+        socket.on('slideChanged', (slideData) => {
+            if (slideData && slideData.id) {
+                isReceivingSlideChange = true;
+                
+                // 受信したスライドに対応するインデックスを検索
+                const slideIndex = presentationSlides.findIndex(slide => slide.id === slideData.id);
+                
+                if (slideIndex !== -1) {
+                    // 対応するスライドが見つかった場合、そのスライドを選択
+                    selectSlide(slideIndex, true); // fromRemote = true で無限ループを防止
+                    console.log('Slide changed by another controller:', slideData.name);
+                } else {
+                    // 対応するスライドが見つからない場合、直接表示のみ更新
+                    currentSlide = slideData;
+                    displaySlide(currentSlide);
+                    updateActiveSlide();
+                    console.log('Remote slide not found in current list:', slideData.name);
+                }
+                
+                // フラグをリセット
+                setTimeout(() => {
+                    isReceivingSlideChange = false;
+                }, 100);
+            }
+        });
         
         function refreshFiles() {
+            // キャッシュをクリア
+            tabCache = {};
+            pdfCache.clear();
+            presentationSlides = [];
+            currentSlide = null;
             socket.emit('getFiles');
         }
         
@@ -395,8 +419,11 @@
                 `;
             }).join('');
             
-            // 総スライド数を更新
-            document.getElementById('totalSlides').textContent = presentationSlides.length;
+            // 総スライド数を更新（要素が存在する場合のみ）
+            const totalSlidesElement = document.getElementById('totalSlides');
+            if (totalSlidesElement) {
+                totalSlidesElement.textContent = presentationSlides.length;
+            }
             
             // PDFサムネイルと動画サムネイルを非同期でレンダリング
             setTimeout(() => {
@@ -460,7 +487,7 @@
                     });
                 }
             });
-            socket.emit('updateSlides', presentationSlides);
+            // socket.emit('updateSlides', presentationSlides); // タブ切り替えではここで送信しない
             renderPresentationSlides();
         }
         
@@ -471,14 +498,22 @@
             renderPresentationSlides();
         }
         
-        function selectSlide(index) {
+        function selectSlide(index, fromRemote = false) {
             currentSlide = presentationSlides[index];
-            socket.emit('changeSlide', currentSlide);
+            
+            // 他のコントローラーからの変更でない場合のみサーバーに送信
+            if (!fromRemote && !isReceivingSlideChange) {
+                socket.emit('changeSlide', currentSlide);
+            }
+            
             displaySlide(currentSlide);
             updateActiveSlide(); // リストは再描画せず、アクティブ状態のみ更新
             
             // 現在のスライド情報を更新
-            document.getElementById('currentSlideInfo').textContent = `${index + 1} / ${presentationSlides.length}`;
+            const currentSlideInfo = document.getElementById('currentSlideInfo');
+            if (currentSlideInfo) {
+                currentSlideInfo.textContent = `${index + 1} / ${presentationSlides.length}`;
+            }
         }
         
         function displaySlide(slide) {
@@ -533,15 +568,8 @@
                     
                 case 'pdf':
                     if (slide.page) {
-                        // PDFページの場合はcanvasでレンダリング
-                        previewArea.innerHTML = `
-                            <div class="preview-content">
-                                <canvas id="pdf-main-canvas" style="max-width: 100%; max-height: 100%;"></canvas>
-                            </div>
-                        `;
-                        setTimeout(() => {
-                            renderPDFPage(slide.path, slide.page, 'pdf-main-canvas');
-                        }, 100);
+                        // PDFページの場合はcanvasでレンダリング（スムーズな遷移）
+                        displayPDFSlideSmooth(slide, previewArea);
                     } else {
                         // 通常のPDFファイル全体表示
                         previewArea.innerHTML = `
@@ -641,11 +669,20 @@
                 
                 // 既存のレンダリングタスクをキャンセル
                 if (renderingTasks.has(canvasId)) {
-                    renderingTasks.get(canvasId).cancel();
+                    try {
+                        renderingTasks.get(canvasId).cancel();
+                    } catch (e) {
+                        console.log('Task cancellation error (ignored):', e.message);
+                    }
                     renderingTasks.delete(canvasId);
                 }
                 
+                // 短時間待機してcanvasの状態をクリア
+                await new Promise(resolve => setTimeout(resolve, 10));
+                
                 const context = canvas.getContext('2d');
+                // canvasをクリア
+                context.clearRect(0, 0, canvas.width, canvas.height);
                 
                 // PDF.jsライブラリを確認
                 if (!window.pdfjsLib) {
@@ -653,11 +690,22 @@
                     return;
                 }
                 
-                const pdf = await pdfjsLib.getDocument(pdfPath).promise;
+                // PDFをキャッシュから取得するか、新規にロード
+                let pdf;
+                if (pdfCache.has(pdfPath)) {
+                    pdf = pdfCache.get(pdfPath);
+                } else {
+                    pdf = await pdfjsLib.getDocument(pdfPath).promise;
+                    pdfCache.set(pdfPath, pdf);
+                }
                 const page = await pdf.getPage(pageNum);
                 
+                // ページ自体の回転情報を取得
+                const originalViewport = page.getViewport({ scale: 1 });
+                const rotation = originalViewport.rotation || 0;
+                
                 const scale = 1.5;
-                const viewport = page.getViewport({ scale });
+                const viewport = page.getViewport({ scale, rotation });
                 
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
@@ -691,11 +739,20 @@
                 
                 // 既存のレンダリングタスクをキャンセル
                 if (renderingTasks.has(canvasId)) {
-                    renderingTasks.get(canvasId).cancel();
+                    try {
+                        renderingTasks.get(canvasId).cancel();
+                    } catch (e) {
+                        console.log('Task cancellation error (ignored):', e.message);
+                    }
                     renderingTasks.delete(canvasId);
                 }
                 
+                // 短時間待機してcanvasの状態をクリア
+                await new Promise(resolve => setTimeout(resolve, 10));
+                
                 const context = canvas.getContext('2d');
+                // canvasをクリア
+                context.clearRect(0, 0, canvas.width, canvas.height);
                 
                 // PDF.jsライブラリを確認
                 if (!window.pdfjsLib) {
@@ -703,11 +760,23 @@
                     return;
                 }
                 
-                const pdf = await pdfjsLib.getDocument(pdfPath).promise;
+                // PDFをキャッシュから取得するか、新規にロード
+                let pdf;
+                if (pdfCache.has(pdfPath)) {
+                    pdf = pdfCache.get(pdfPath);
+                } else {
+                    pdf = await pdfjsLib.getDocument(pdfPath).promise;
+                    pdfCache.set(pdfPath, pdf);
+                }
+                
                 const page = await pdf.getPage(pageNum);
                 
-                const scale = 0.3; // サムネイル用のより小さいスケール
-                const viewport = page.getViewport({ scale });
+                // ページ自体の回転情報を取得
+                const originalViewport = page.getViewport({ scale: 1 });
+                const rotation = originalViewport.rotation || 0;
+                
+                const scale = 0.2; // さらに小さいスケールで高速化
+                const viewport = page.getViewport({ scale, rotation });
                 
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
@@ -733,6 +802,49 @@
             }
         }
         
+        // PDFスライドをスムーズに表示する関数
+        async function displayPDFSlideSmooth(slide, previewArea) {
+            try {
+                // 一意のcanvas IDを生成
+                const canvasId = `pdf-main-canvas-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                // 新しいcanvas要素を作成（画面外に）
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = canvasId;
+                newCanvas.style.cssText = 'max-width: 100%; max-height: 100%; position: absolute; left: -9999px; top: -9999px;';
+                
+                // 一時的にcanvasを画面外に追加
+                document.body.appendChild(newCanvas);
+                
+                // PDFをレンダリング（画面外で）
+                await renderPDFPage(slide.path, slide.page, canvasId);
+                
+                // レンダリング完了後、canvasを正しい位置に移動
+                newCanvas.style.cssText = 'max-width: 100%; max-height: 100%;';
+                const newContainer = document.createElement('div');
+                newContainer.className = 'preview-content';
+                newContainer.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;';
+                newContainer.appendChild(newCanvas);
+                
+                // 古い内容を新しい内容に一瞬で置き換え
+                previewArea.innerHTML = '';
+                previewArea.appendChild(newContainer);
+                
+            } catch (error) {
+                console.error('Error displaying PDF slide:', error);
+                // エラー時は従来の方法にフォールバック
+                const fallbackCanvasId = `pdf-main-canvas-fallback-${Date.now()}`;
+                previewArea.innerHTML = `
+                    <div class="preview-content">
+                        <canvas id="${fallbackCanvasId}" style="max-width: 100%; max-height: 100%;"></canvas>
+                    </div>
+                `;
+                setTimeout(() => {
+                    renderPDFPage(slide.path, slide.page, fallbackCanvasId);
+                }, 100);
+            }
+        }
+
         // アクティブスライドのスタイルのみを更新（リスト全体を再描画しない）
         function updateActiveSlide() {
             const slideItems = document.querySelectorAll('.slide-item');
@@ -823,6 +935,59 @@
                 nextSlide();
             }
         });
+        
+        // タブ切り替え機能
+        function switchTab(category) {
+            // 現在のタブのスライドをキャッシュに保存
+            if (currentCategory && presentationSlides.length > 0) {
+                tabCache[currentCategory] = {
+                    slides: [...presentationSlides],
+                    currentSlide: currentSlide
+                };
+            }
+            
+            currentCategory = category;
+            
+            // タブボタンのアクティブ状態を更新
+            document.querySelectorAll('.tab-button').forEach(button => {
+                if (button.dataset.category === category) {
+                    button.classList.add('active');
+                    button.style.borderBottom = '3px solid #007bff';
+                    button.style.color = '#007bff';
+                    button.style.fontWeight = 'bold';
+                } else {
+                    button.classList.remove('active');
+                    button.style.borderBottom = '3px solid transparent';
+                    button.style.color = '#666';
+                    button.style.fontWeight = 'normal';
+                }
+            });
+            
+            // キャッシュから復元するか、新規作成
+            if (tabCache[category]) {
+                // キャッシュから復元
+                presentationSlides = [...tabCache[category].slides];
+                currentSlide = tabCache[category].currentSlide;
+                renderPresentationSlides();
+                if (currentSlide) {
+                    displaySlide(currentSlide);
+                }
+            } else {
+                // 新規作成
+                presentationSlides = [];
+                currentSlide = null;
+                
+                if (availableFiles[category] && availableFiles[category].length > 0) {
+                    autoAddFilesToPresentation(availableFiles[category]);
+                } else {
+                    renderPresentationSlides();
+                    displaySlide(null);
+                }
+            }
+            
+            // スライドリストの更新をサーバーに送信
+            socket.emit('updateSlides', presentationSlides);
+        }
         
         refreshFiles();
     </script>

@@ -45,39 +45,61 @@ const getPDFPageCount = async (filePath) => {
 const getFileList = async () => {
   try {
     const uploadDir = path.join(__dirname, '../uploads');
-    const files = await fs.readdir(uploadDir);
-    const fileList = [];
+    const categories = {
+      'イントロ質疑': [],
+      '倉林さん': [],
+      '栗原先生': [],
+      '高野さん': []
+    };
     
-    for (const file of files) {
-      const ext = path.extname(file).toLowerCase();
-      const stats = await fs.stat(path.join(uploadDir, file));
-      
-      if (['.png', '.jpg', '.jpeg', '.mp4', '.html', '.md', '.pdf', '.pptx', '.ppt'].includes(ext)) {
-        const fileInfo = {
-          id: Date.now() + Math.random(),
-          name: file,
-          path: `/uploads/${file}`,
-          type: getFileType(ext),
-          size: stats.size,
-          uploadedAt: stats.mtime
-        };
+    // 各カテゴリフォルダからファイルを取得
+    for (const category of Object.keys(categories)) {
+      const categoryDir = path.join(uploadDir, category);
+      try {
+        const files = await fs.readdir(categoryDir);
+        console.log(`Category: ${category}, Files found:`, files); // デバッグログ追加
         
-        // PDFの場合はページ数を取得
-        if (ext === '.pdf') {
-          fileInfo.pageCount = await getPDFPageCount(path.join(uploadDir, file));
-        } else if (ext === '.pptx' || ext === '.ppt') {
-          // PPTの場合はデフォルトページ数を設定（実際の取得は別途実装が必要）
-          fileInfo.pageCount = 10; // デフォルト値
+        for (const file of files) {
+          const ext = path.extname(file).toLowerCase();
+          if (['.png', '.jpg', '.jpeg', '.mp4', '.html', '.md', '.pdf', '.pptx', '.ppt'].includes(ext)) {
+            const filePath = path.join(categoryDir, file);
+            const stats = await fs.stat(filePath);
+            
+            const fileInfo = {
+              id: Date.now() + Math.random(),
+              name: file,
+              path: `/uploads/${encodeURIComponent(category)}/${encodeURIComponent(file)}`,
+              type: getFileType(ext),
+              size: stats.size,
+              uploadedAt: stats.mtime,
+              category: category
+            };
+            console.log(`Adding file to ${category}:`, file); // デバッグログ追加
+            
+            // PDFの場合はページ数を取得
+            if (ext === '.pdf') {
+              fileInfo.pageCount = await getPDFPageCount(filePath);
+            } else if (ext === '.pptx' || ext === '.ppt') {
+              fileInfo.pageCount = 10; // デフォルト値
+            }
+            
+            categories[category].push(fileInfo);
+          }
         }
-        
-        fileList.push(fileInfo);
+      } catch (err) {
+        console.log(`Category folder ${category} not found or empty`);
       }
     }
     
-    return fileList;
+    return categories;
   } catch (error) {
     console.error('Error reading files:', error);
-    return [];
+    return {
+      'イントロ質疑': [],
+      '倉林さん': [],
+      '栗原先生': [],
+      '高野さん': []
+    };
   }
 };
 
@@ -178,8 +200,9 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Open http://localhost:${PORT} for controller`);
+  console.log(`Local access: http://localhost:${PORT}`);
+  console.log(`Network access: http://[YOUR_IP_ADDRESS]:${PORT}`);
   console.log(`Upload files to: ${path.join(__dirname, '../uploads')}`);
 });
