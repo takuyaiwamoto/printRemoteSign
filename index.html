@@ -35,6 +35,29 @@
       <div id="canvas-wrap" class="canvas-wrap">
         <canvas id="paint"></canvas>
       </div>
+
+      <!-- 右側ツール群（縦三列の太さ / 隣に色ボタン） -->
+      <aside class="side-tools" aria-label="ツール">
+        <div class="group sizes" aria-label="ペン太さ">
+          <button class="size-btn active" data-size="thin" title="細い" aria-pressed="true">
+            <span class="stroke stroke-thin"></span>
+          </button>
+          <button class="size-btn" data-size="normal" title="普通" aria-pressed="false">
+            <span class="stroke stroke-normal"></span>
+          </button>
+          <button class="size-btn" data-size="thick" title="太い" aria-pressed="false">
+            <span class="stroke stroke-thick"></span>
+          </button>
+        </div>
+        <div class="group colors" aria-label="色">
+          <button class="color-btn active" data-color="#000000" title="黒" style="--swatch:#000000" aria-pressed="true"></button>
+          <button class="color-btn" data-color="#e11d48" title="赤" style="--swatch:#e11d48" aria-pressed="false"></button>
+          <button class="color-btn" data-color="#2563eb" title="青" style="--swatch:#2563eb" aria-pressed="false"></button>
+          <button class="color-btn" data-color="#16a34a" title="緑" style="--swatch:#16a34a" aria-pressed="false"></button>
+          <button class="color-btn" data-color="#ec4899" title="ピンク" style="--swatch:#ec4899" aria-pressed="false"></button>
+        </div>
+      </aside>
+
       <p class="hint">クリック＆ドラッグ（指ならスワイプ）で線が描けます。</p>
     </main>
 

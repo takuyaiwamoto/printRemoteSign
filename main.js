@@ -12,6 +12,8 @@
   const colorInput = document.getElementById('color');
   const clearBtn = document.getElementById('clear');
   const saveBtn = document.getElementById('save');
+  const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
+  const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
 
   let isDrawing = false;
   let lastX = 0;
@@ -268,6 +270,32 @@
   colorInput?.addEventListener('input', (e) => {
     brushColor = e.target.value;
     ctx.strokeStyle = brushColor;
+  });
+
+  // 右サイド: 太さ・色のボタン
+  const SIZE_PRESETS = { thin: brushSizeCssPx, normal: Math.max(brushSizeCssPx * 2, 8), thick: Math.max(brushSizeCssPx * 3.5, 14) };
+  function setActive(list, el) {
+    list.forEach(b => { b.classList.toggle('active', b === el); b.setAttribute('aria-pressed', b === el ? 'true' : 'false'); });
+  }
+  sizeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-size');
+      const val = Math.floor(SIZE_PRESETS[key] || brushSizeCssPx);
+      brushSizeCssPx = val;
+      ctx.lineWidth = brushSizeCssPx * DPR;
+      if (sizeInput) sizeInput.value = String(brushSizeCssPx);
+      setActive(sizeBtns, btn);
+    });
+  });
+  colorBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const col = btn.getAttribute('data-color');
+      if (!col) return;
+      brushColor = col;
+      ctx.strokeStyle = brushColor;
+      if (colorInput) colorInput.value = brushColor;
+      setActive(colorBtns, btn);
+    });
   });
 
   // 全消去（白で塗りつぶし）

@@ -35,8 +35,10 @@ body {
 
 .stage {
   display: grid;
+  grid-template-columns: 1fr auto; /* キャンバス + 右ツール */
+  align-items: start;
   justify-items: center;
-  gap: 12px;
+  gap: 12px 16px;
   padding: 16px;
 }
 
@@ -58,8 +60,58 @@ canvas {
   touch-action: none; /* タッチ操作のパン/ズームを無効化 */
 }
 
+.side-tools {
+  align-self: stretch;
+  display: grid;
+  grid-auto-flow: column; /* 太さと色を横並びの縦列に */
+  gap: 12px;
+}
+.side-tools .group {
+  display: grid;
+  gap: 10px;
+}
+.size-btn, .color-btn {
+  appearance: none;
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.size-btn:hover, .color-btn:hover { background: #f3f4f6; }
+.size-btn.active, .color-btn.active { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.size-btn .stroke {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  position: relative;
+}
+.stroke::after {
+  content: "";
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 24px; height: 2px; background: #111827; border-radius: 999px;
+}
+.stroke-thin::after { height: 2px; }
+.stroke-normal::after { height: 4px; }
+.stroke-thick::after { height: 7px; }
+
+.color-btn { position: relative; }
+.color-btn::before {
+  content: "";
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  background: var(--swatch, #000);
+  display: block;
+}
+
 .hint {
   margin: 0;
   color: #6b7280;
+  grid-column: 1 / -1;
 }
 
+@media (max-width: 680px) {
+  .stage { grid-template-columns: 1fr; }
+  .side-tools { justify-self: center; grid-auto-flow: row; grid-template-columns: repeat(5, 44px); }
+  .side-tools .group { grid-auto-flow: column; }
+}
