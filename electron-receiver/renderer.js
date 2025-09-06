@@ -40,6 +40,14 @@
   let lastInfo = '';
   let httpPollTimer = null;
 
+  // Smoother rendering pipeline: coalesce frames, decode off-thread, draw on RAF
+  let latestDataURL = null;
+  let decoding = false;
+  let currentBitmap = null; // ImageBitmap or HTMLImageElement
+  let frameVersion = 0;
+  let lastDrawnVersion = -1;
+  let rafRunning = false;
+
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
     if (text !== lastInfo) {
@@ -79,7 +87,7 @@
         return;
       }
       if (msg.type === 'frame' && typeof msg.data === 'string') {
-        drawDataURL(msg.data);
+        ingestFrame(msg.data);
       }
     };
   }
@@ -94,7 +102,7 @@
         if (r.ok) {
           const j = await r.json();
           if (j && j.type === 'frame' && typeof j.data === 'string' && j.data) {
-            drawDataURL(j.data);
+            ingestFrame(j.data);
           }
         }
       } catch (_) {}
@@ -107,17 +115,61 @@
     if (httpPollTimer) { clearInterval(httpPollTimer); httpPollTimer = null; }
   }
 
-  function drawDataURL(dataURL) {
-    const img = new Image();
-    img.onload = () => {
-      // Clear and draw scaled to fit
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+  function ingestFrame(dataURL) {
+    latestDataURL = dataURL;
+    decodeIfIdle();
+    ensureRAF();
+  }
+
+  async function decodeIfIdle() {
+    if (decoding || !latestDataURL) return;
+    decoding = true;
+    const toDecode = latestDataURL;
+    try {
+      let bmp = null;
+      if (typeof createImageBitmap === 'function') {
+        const blob = await (await fetch(toDecode)).blob();
+        bmp = await createImageBitmap(blob);
+      } else {
+        // Fallback for older environments
+        bmp = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = toDecode;
+        });
+      }
+      currentBitmap = bmp;
+      frameVersion++;
+    } catch (_) {
+      // ignore decode errors
+    } finally {
+      decoding = false;
+      // If a new frame arrived while decoding, decode again to catch up
+      if (latestDataURL !== toDecode) decodeIfIdle();
+    }
+  }
+
+  function ensureRAF() {
+    if (rafRunning) return;
+    rafRunning = true;
+    const loop = () => {
+      if (frameVersion !== lastDrawnVersion && currentBitmap) {
+        // Draw latest bitmap scaled to canvas
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        // Many frames already contain white background, but ensure full cover
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const srcW = currentBitmap.width || currentBitmap.naturalWidth;
+        const srcH = currentBitmap.height || currentBitmap.naturalHeight;
+        ctx.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        lastDrawnVersion = frameVersion;
+      }
+      requestAnimationFrame(loop);
     };
-    img.src = dataURL;
+    requestAnimationFrame(loop);
   }
 
   connect();
