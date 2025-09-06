@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>シンプルお絵かき (A4縦)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="left">
+        <strong>シンプルお絵かき</strong>
+        <span class="muted">— A4縦キャンバス</span>
+      </div>
+      <div class="right">
+        <label>
+          線の太さ
+          <input id="size" type="range" min="1" max="30" value="4" />
+        </label>
+        <label>
+          色
+          <input id="color" type="color" value="#000000" />
+        </label>
+        <button id="clear">全消去</button>
+        <button id="save">保存</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <!--
+        A4 縦の比率は 210 : 297 (およそ 0.707 : 1)。
+        実際の描画解像度はデバイスピクセルに合わせて JS 側で設定します。
+      -->
+      <div id="canvas-wrap" class="canvas-wrap">
+        <canvas id="paint"></canvas>
+      </div>
+      <p class="hint">クリック＆ドラッグ（指ならスワイプ）で線が描けます。</p>
+    </main>
+
+    <script src="main.js"></script>
+  </body>
+  </html>
+

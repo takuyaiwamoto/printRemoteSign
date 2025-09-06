@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>受信側キャンバス（A4縦）</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: #0f172a; /* slate-900 */
+        color: #e5e7eb;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans JP", Meiryo, sans-serif;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; gap: 8px; background: #111827; border-bottom: 1px solid #1f2937;
+      }
+      .status { font-size: 12px; color: #9ca3af; }
+      main { display: grid; place-items: center; padding: 12px; }
+      .wrap {
+        width: 100%; height: 100%; max-width: 1200px; max-height: 100%;
+        display: grid; place-items: center;
+      }
+      .canvas-box {
+        background: #fff; border-radius: 8px; overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        position: relative; width: 100%; height: auto; aspect-ratio: 210 / 297;
+      }
+      canvas { width: 100%; height: 100%; display: block; }
+      footer { padding: 6px 12px; font-size: 12px; color: #9ca3af; }
+      code { color: #a7f3d0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div><strong>受信側キャンバス</strong> <span class="status" id="status">接続待機</span></div>
+      <div class="status" id="info"></div>
+    </header>
+    <main>
+      <div class="wrap">
+        <div class="canvas-box">
+          <canvas id="view"></canvas>
+        </div>
+      </div>
+    </main>
+    <footer>
+      サーバー: <code id="serverLabel"></code> ／ チャンネル: <code id="channelLabel"></code>
+    </footer>
+    <script src="renderer.js"></script>
+  </body>
+  </html>
+
