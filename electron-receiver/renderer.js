@@ -49,8 +49,9 @@
   let rafRunning = false;
 
   // Realtime stroke rendering state
-  const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y}], lastX, lastY }
+  const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
   const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
+  const STROKE_BUFFER_MS = 120; // 小さな遅延で滑らかさを優先
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
@@ -96,6 +97,7 @@
       }
       if (msg.type === 'clear') {
         clearCanvas();
+        strokes.clear();
         return;
       }
       if (msg.type === 'stroke') {
@@ -145,72 +147,95 @@
     if (!phase) return;
     if (phase === 'start') {
       const id = String(msg.id || Date.now());
-      const p = normToCanvas(msg.nx, msg.ny);
-      const s = {
-        color: msg.color || '#000',
-        sizeCss: Number(msg.size || 4),
-        points: [p],
-        lastX: p.x,
-        lastY: p.y,
-      };
+      const pxy = normToCanvas(msg.nx, msg.ny);
+      const now = performance.now();
+      const p = { x: pxy.x, y: pxy.y, time: now };
+      const s = { color: msg.color || '#000', sizeCss: Number(msg.size || 4), points: [p], drawnUntil: 0, ended: false };
       strokes.set(id, s);
-      // dot for taps
-      ctx.beginPath();
-      ctx.fillStyle = s.color;
-      ctx.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
-      ctx.fill();
       return;
     }
     const id = String(msg.id || '');
     const s = strokes.get(id);
     if (!s) return;
     if (phase === 'point') {
-      const p = normToCanvas(msg.nx, msg.ny);
-      const dx = p.x - s.lastX, dy = p.y - s.lastY;
+      const pxy = normToCanvas(msg.nx, msg.ny);
+      const now = performance.now();
+      const p = { x: pxy.x, y: pxy.y, time: now };
+      const last = s.points[s.points.length - 1];
+      const dx = p.x - last.x, dy = p.y - last.y;
       if (dx * dx + dy * dy < DIST_THRESH_SQ) return;
       s.points.push(p);
-      const n = s.points.length;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.sizeCss * DPR;
-      if (n === 2) {
-        ctx.beginPath();
-        ctx.moveTo(s.points[0].x, s.points[0].y);
-        ctx.lineTo(s.points[1].x, s.points[1].y);
-        ctx.stroke();
-      } else if (n >= 3) {
-        const p0 = s.points[n - 3];
-        const p1 = s.points[n - 2];
-        const p2 = s.points[n - 1];
-        const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-        const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-        ctx.beginPath();
-        ctx.moveTo(m1.x, m1.y);
-        ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
-        ctx.stroke();
-      }
-      s.lastX = p.x; s.lastY = p.y;
       return;
     }
     if (phase === 'end') {
-      const n = s.points.length;
-      if (n >= 3) {
-        const p0 = s.points[n - 3];
-        const p1 = s.points[n - 2];
-        const p2 = s.points[n - 1];
-        const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      s.ended = true;
+      return;
+    }
+  }
+
+  function processStrokes() {
+    const now = performance.now();
+    const target = now - STROKE_BUFFER_MS;
+
+    for (const [id, s] of strokes) {
+      // Draw any segments whose endpoint time <= target
+      while (s.points.length - 1 > s.drawnUntil) {
+        const i = s.drawnUntil + 1; // candidate new endpoint index
+        const pt = s.points[i];
+        if (pt.time > target) break;
+
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.strokeStyle = s.color;
         ctx.lineWidth = s.sizeCss * DPR;
-        ctx.beginPath();
-        ctx.moveTo(mPrev.x, mPrev.y);
-        ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
-        ctx.stroke();
+
+        if (i === 1) {
+          // First segment: simple line p0->p1
+          const p0 = s.points[0], p1 = s.points[1];
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+        } else {
+          // Middle segments: quadratic bezier between midpoints
+          const p0 = s.points[i - 2];
+          const p1 = s.points[i - 1];
+          const p2 = s.points[i];
+          const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+          const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+          ctx.beginPath();
+          ctx.moveTo(m1.x, m1.y);
+          ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+          ctx.stroke();
+        }
+        s.drawnUntil = i;
       }
-      strokes.delete(id);
-      return;
+
+      // Finalize ended strokes when all points rendered
+      if (s.ended && s.drawnUntil >= s.points.length - 1) {
+        const n = s.points.length;
+        if (n >= 3) {
+          const p0 = s.points[n - 3];
+          const p1 = s.points[n - 2];
+          const p2 = s.points[n - 1];
+          const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = s.sizeCss * DPR;
+          ctx.beginPath();
+          ctx.moveTo(mPrev.x, mPrev.y);
+          ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+          ctx.stroke();
+        } else if (n === 1) {
+          const p = s.points[0];
+          ctx.beginPath();
+          ctx.fillStyle = s.color;
+          ctx.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        strokes.delete(id);
+      }
     }
   }
 
@@ -266,6 +291,8 @@
         ctx.restore();
         lastDrawnVersion = frameVersion;
       }
+      // Always process stroke queues toward target time
+      processStrokes();
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
