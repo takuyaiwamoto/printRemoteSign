@@ -57,6 +57,21 @@
     ws.onopen = () => { wsReady = true; httpFallback = false; /* 首描画のためのフレーム送信は不要 */ };
     ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1000); };
     ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null');
+        if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
+          if (typeof msg.data.bgSender === 'string') {
+            ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+          } else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) {
+            const img = new Image();
+            img.onload = () => { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(img,0,0,img.naturalWidth,img.naturalHeight,0,0,canvas.width,canvas.height); ctx.restore(); };
+            img.src = msg.data.bgSender.url;
+          }
+        }
+      } catch(_) {}
+    };
   }
   connectWS();
 
@@ -152,10 +167,12 @@
       const nx = x / canvas.width, ny = y / canvas.height;
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       currentStrokeId = id;
+      const cssW = canvas.width / DPR;
+      const sizeN = brushSizeCssPx / cssW; // キャンバス幅に対する相対太さ
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN })); } catch (_) {}
       } else {
-        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx });
+        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN });
       }
       realtimeEverUsed = true;
     }

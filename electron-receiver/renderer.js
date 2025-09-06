@@ -19,6 +19,8 @@
   const ink = inkCanvas?.getContext('2d');
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
   const RATIO = 210 / 297; // A4 portrait ratio
+  const DEBUG = String(new URLSearchParams(location.search).get('debug') || window.DEBUG_RECEIVER || '') === '1';
+  const log = (...a) => { if (DEBUG) console.log('[receiver]', ...a); };
 
   function fitCanvas() {
     if (!baseCanvas || !inkCanvas) return;
@@ -41,11 +43,8 @@
   }
 
   // Resize -> reflow canvases then repaint background
-  window.addEventListener('resize', () => { fitCanvas(); try { drawBackground(); } catch(_) {} });
-  // Initial size; background will be painted later after variables init
-  fitCanvas();
-
-  window.addEventListener('resize', fitCanvas);
+  window.addEventListener('resize', () => { log('resize'); fitCanvas(); try { drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
+  // Initial size
   fitCanvas();
 
   let ws;
@@ -184,7 +183,7 @@
 
   function clearCanvas() {
     if (!base || !ink) return;
-    if (DEBUG) console.log('[receiver] clearCanvas');
+    log('clearCanvas');
     drawBackground();
     ink.save();
     ink.setTransform(1, 0, 0, 1, 0, 0);
@@ -193,7 +192,7 @@
   }
 
   function drawBackground() {
-    if (DEBUG) console.log('[receiver] drawBackground', { mode: bgMode, hasImg: !!bgImage, cw: baseCanvas.width, ch: baseCanvas.height });
+    log('drawBackground', { mode: bgMode, hasImg: !!bgImage, cw: baseCanvas.width, ch: baseCanvas.height });
     base.save();
     base.setTransform(1, 0, 0, 1, 0, 0);
     if (bgMode === 'image' && bgImage) {
@@ -203,7 +202,7 @@
       let sx = 0, sy = 0, sWidth = sw, sHeight = sh;
       if (sRatio > cRatio) { sWidth = sh * cRatio; sx = (sw - sWidth) / 2; }
       else if (sRatio < cRatio) { sHeight = sw / cRatio; sy = (sh - sHeight) / 2; }
-      if (DEBUG) console.log('[receiver] drawBackground cover', { sw, sh, cw, ch, sx, sy, sWidth, sHeight, sRatio, cRatio });
+      log('drawBackground cover', { sw, sh, cw, ch, sx, sy, sWidth, sHeight, sRatio, cRatio });
       base.drawImage(bgImage, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
     } else {
       base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
@@ -212,7 +211,7 @@
   }
 
   function applyConfig(data) {
-    if (DEBUG) console.log('[receiver] applyConfig', data);
+    log('applyConfig', data);
     if (data.bgReceiver) {
       if (typeof data.bgReceiver === 'string') { bgMode = data.bgReceiver; bgImage = null; clearCanvas(); }
       else if (data.bgReceiver.mode === 'image' && data.bgReceiver.url) {
@@ -224,27 +223,27 @@
           try { candidates.push(new URL(inUrl, location.href).href); } catch(_) {}
           try { candidates.push(new URL('../' + inUrl, location.href).href); } catch(_) {}
         }
-        if (DEBUG) console.log('[receiver] bgReceiver candidates', candidates);
+        log('bgReceiver candidates', candidates);
         (async () => {
           for (const url of candidates) {
             try {
               const isHttp = /^https?:/i.test(url);
               if (isHttp && typeof createImageBitmap === 'function') {
                 const bmp = await createImageBitmap(await (await fetch(url)).blob());
-                bgImage = bmp; bgMode = 'image'; if (DEBUG) console.log('[receiver] bg loaded via bitmap', url, { w: bmp.width, h: bmp.height }); clearCanvas(); return;
+                bgImage = bmp; bgMode = 'image'; log('bg loaded via bitmap', url, { w: bmp.width, h: bmp.height }); clearCanvas(); return;
               } else {
                 // For file:// (and as a safe fallback), use Image element loader
                 await new Promise((res, rej) => {
                   const img = new Image();
-                  img.onload = () => { bgImage = img; bgMode = 'image'; if (DEBUG) console.log('[receiver] bg loaded via Image', url, { w: img.naturalWidth, h: img.naturalHeight }); clearCanvas(); res(); };
+                  img.onload = () => { bgImage = img; bgMode = 'image'; log('bg loaded via Image', url, { w: img.naturalWidth, h: img.naturalHeight }); clearCanvas(); res(); };
                   img.onerror = rej;
                   img.src = url;
                 });
                 return;
               }
-            } catch(err) { if (DEBUG) console.log('[receiver] bg load failed', url, err?.message || err); /* try next candidate */ }
+            } catch(err) { log('bg load failed', url, err?.message || err); /* try next candidate */ }
           }
-          if (DEBUG) console.log('[receiver] bg load all candidates failed; fallback white');
+          log('bg load all candidates failed; fallback white');
           bgMode = 'white'; bgImage = null; clearCanvas();
         })();
       }
@@ -253,7 +252,7 @@
       const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100)));
       const factor = v / 100;
       if (canvasBox) canvasBox.style.transform = `scale(${factor})`;
-      if (DEBUG) console.log('[receiver] scaleReceiver applied', { v, factor });
+      log('scaleReceiver applied', { v, factor });
     }
   }
 
@@ -266,13 +265,14 @@
       const pxy = normToCanvas(msg.nx, msg.ny);
       const now = performance.now();
       const p = { x: pxy.x, y: pxy.y, time: now };
-      const s = { color: msg.color || '#000', sizeCss: Number(msg.size || 4), points: [p], drawnUntil: 0, ended: false };
+      const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * baseCanvas.width) : (Number(msg.size || 4) * DPR);
+      const s = { color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], drawnUntil: 0, ended: false };
       strokes.set(id, s);
       // 即時に開始点を指定太さで可視化（細く見える問題を避ける）
       if (ink) {
         ink.beginPath();
         ink.fillStyle = s.color;
-        ink.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+        ink.arc(p.x, p.y, (s.sizeDev) / 2, 0, Math.PI * 2);
         ink.fill();
       }
       return;
@@ -320,7 +320,8 @@
           const p = s.points[0];
           ink.beginPath();
           ink.fillStyle = s.color;
-          ink.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+          const r = (s.sizeDev || (s.sizeCss * DPR)) / 2;
+          ink.arc(p.x, p.y, r, 0, Math.PI * 2);
           ink.fill();
           strokes.delete(id);
           continue;
@@ -332,7 +333,7 @@
       ink.lineJoin = 'round';
       ink.lineCap = 'round';
       ink.strokeStyle = s.color;
-      ink.lineWidth = s.sizeCss * DPR;
+      ink.lineWidth = s.sizeDev || (s.sizeCss * DPR);
 
       let drew = false;
       ink.beginPath();

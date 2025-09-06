@@ -26,9 +26,9 @@ transport.onmessage = (msg) => {
 };
 
 let realtimeEverUsed = false;
-cm.onStrokeStart = ({ id, nx, ny, color, size }) => {
+cm.onStrokeStart = ({ id, nx, ny, color, size, sizeN }) => {
   if (SERVER_URL) {
-    transport.sendStroke({ type: 'stroke', phase: 'start', id, nx, ny, color, size });
+    transport.sendStroke({ type: 'stroke', phase: 'start', id, nx, ny, color, size, sizeN });
     realtimeEverUsed = true;
   }
 };

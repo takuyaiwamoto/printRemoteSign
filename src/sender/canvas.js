@@ -112,7 +112,9 @@ export class CanvasManager {
     this.lastX = x; this.lastY = y;
     this.points = [{ x, y }];
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: this.brushSizeCss });
+    const cssW = this.canvas.width / this.DPR; // CSSピクセル幅
+    const sizeN = this.brushSizeCss / cssW;    // キャンバス幅に対する相対太さ
+    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: this.brushSizeCss, sizeN });
     this._currentId = id;
   }
 
