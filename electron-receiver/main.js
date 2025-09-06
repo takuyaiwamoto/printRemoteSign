@@ -1,8 +1,17 @@
 const { app, BrowserWindow } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 function createWindow() {
-  const server = process.env.SERVER_URL || 'ws://localhost:8787';
-  const channel = process.env.CHANNEL || 'default';
+  // 設定の優先順位: 環境変数 > config.json > デフォルト
+  let fileCfg = {};
+  try {
+    const p = path.join(__dirname, 'config.json');
+    if (fs.existsSync(p)) fileCfg = JSON.parse(fs.readFileSync(p, 'utf-8')) || {};
+  } catch (_) {}
+
+  const server = process.env.SERVER_URL || fileCfg.server || 'ws://localhost:8787';
+  const channel = process.env.CHANNEL || fileCfg.channel || 'default';
 
   const win = new BrowserWindow({
     width: 900,
@@ -31,4 +40,3 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-
