@@ -11,25 +11,30 @@
   serverLabel.textContent = SERVER;
   channelLabel.textContent = CHANNEL;
 
-  const canvas = document.getElementById('view');
-  const ctx = canvas.getContext('2d');
+  const baseCanvas = document.getElementById('base');
+  const inkCanvas = document.getElementById('ink');
+  const base = baseCanvas?.getContext('2d');
+  const ink = inkCanvas?.getContext('2d');
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
   const RATIO = 210 / 297; // A4 portrait ratio
 
   function fitCanvas() {
-    const box = canvas.parentElement.getBoundingClientRect();
+    if (!baseCanvas || !inkCanvas) return;
+    const box = baseCanvas.parentElement.getBoundingClientRect();
     let width = box.width;
     let height = Math.round(width / RATIO);
     if (height > box.height) {
       height = box.height;
       width = Math.round(height * RATIO);
     }
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    canvas.width = Math.floor(width * DPR);
-    canvas.height = Math.floor(height * DPR);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    for (const c of [baseCanvas, inkCanvas]) {
+      c.style.width = width + 'px';
+      c.style.height = height + 'px';
+      c.width = Math.floor(width * DPR);
+      c.height = Math.floor(height * DPR);
+    }
+    if (base) { base.imageSmoothingEnabled = true; base.imageSmoothingQuality = 'high'; }
+    if (ink) { ink.imageSmoothingEnabled = true; ink.imageSmoothingQuality = 'high'; }
   }
 
   window.addEventListener('resize', fitCanvas);
@@ -158,15 +163,20 @@
   }
 
   function normToCanvas(nx, ny) {
-    return { x: nx * canvas.width, y: ny * canvas.height };
+    return { x: nx * baseCanvas.width, y: ny * baseCanvas.height };
   }
 
   function clearCanvas() {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
+    if (!base || !ink) return;
+    base.save();
+    base.setTransform(1, 0, 0, 1, 0, 0);
+    base.fillStyle = '#ffffff';
+    base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+    base.restore();
+    ink.save();
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+    ink.restore();
   }
 
   function handleStroke(msg) {
