@@ -20,7 +20,7 @@
   // --- Sync (optional): send frames to a WebSocket relay server ---
   const qs = new URLSearchParams(location.search);
   const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
-  const CHANNEL = (qs.get('channel') || 'default').trim();
+  const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
   let ws = null;
   let wsReady = false;
   let lastSent = 0;
