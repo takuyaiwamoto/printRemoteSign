@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.1';
+  const RECEIVER_VERSION = '0.6.2';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -55,6 +55,7 @@
   let frameVersion = 0;
   let lastDrawnVersion = -1;
   let rafRunning = false;
+  let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
 
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
@@ -101,7 +102,7 @@
         return;
       }
       if (msg.type === 'frame' && typeof msg.data === 'string') {
-        ingestFrame(msg.data);
+        if (!ignoreFrames) ingestFrame(msg.data);
         return;
       }
       if (msg.type === 'clear') {
@@ -185,12 +186,20 @@
     const phase = msg.phase;
     if (!phase) return;
     if (phase === 'start') {
+      ignoreFrames = true; // 以降はPNGフレームを無視
       const id = String(msg.id || Date.now());
       const pxy = normToCanvas(msg.nx, msg.ny);
       const now = performance.now();
       const p = { x: pxy.x, y: pxy.y, time: now };
       const s = { color: msg.color || '#000', sizeCss: Number(msg.size || 4), points: [p], drawnUntil: 0, ended: false };
       strokes.set(id, s);
+      // 即時に開始点を指定太さで可視化（細く見える問題を避ける）
+      if (ink) {
+        ink.beginPath();
+        ink.fillStyle = s.color;
+        ink.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+        ink.fill();
+      }
       return;
     }
     const id = String(msg.id || '');

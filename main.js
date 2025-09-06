@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.6.1';
+  const SENDER_VERSION = '0.6.2';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
@@ -32,12 +32,13 @@
   const SEND_FRAMES_DURING_DRAW = false; // 逐次描画は座標で行うため、描画中のフレーム送信は既定で無効化
   let httpFallback = false;
   let currentStrokeId = null;
+  let realtimeEverUsed = false; // 一度でも座標ストリームを使ったらフレーム送信を抑制
 
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${SERVER_URL.replace(/^http/, 'ws').replace(/\/$/, '')}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
     try { ws = new WebSocket(url); } catch (_) { httpFallback = !!SERVER_URL; return; }
-    ws.onopen = () => { wsReady = true; httpFallback = false; sendFrame(true); };
+    ws.onopen = () => { wsReady = true; httpFallback = false; /* 首描画のためのフレーム送信は不要 */ };
     ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1000); };
     ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; };
   }
@@ -119,8 +120,8 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    // サイズ変更時も現在の状態を送信
-    sendFrame(true);
+    // リアルタイム座標を使う場合はフレーム送信しない
+    if (!realtimeEverUsed) sendFrame(true);
   }
 
   function getPos(e) {
@@ -148,6 +149,7 @@
       } else {
         postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx });
       }
+      realtimeEverUsed = true;
     }
   }
 
@@ -221,8 +223,8 @@
     }
     points = [];
 
-    // 最終フレーム送信
-    sendFrame(true);
+    // リアルタイム座標が使えている場合はフレーム送信しない（太さやエッジの差異を避ける）
+    if (!realtimeEverUsed) sendFrame(true);
 
     // Realtime stroke end
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
@@ -270,7 +272,7 @@
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    sendFrame(true);
+    if (!realtimeEverUsed) sendFrame(true);
     if (wsReady) {
       try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
