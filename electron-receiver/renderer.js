@@ -22,12 +22,13 @@
 
   function fitCanvas() {
     if (!baseCanvas || !inkCanvas) return;
-    const box = baseCanvas.parentElement.getBoundingClientRect();
-    let width = box.width;
-    let height = Math.round(width / RATIO);
-    if (height > box.height) {
-      height = box.height;
-      width = Math.round(height * RATIO);
+    // Use layout sizes not affected by CSS transform scale
+    const parent = baseCanvas.parentElement;
+    let width = parent.offsetWidth;
+    let height = parent.offsetHeight;
+    if (!height) {
+      // Fallback to ratio if offsetHeight is 0 (older Electron)
+      height = Math.round(width / RATIO);
     }
     for (const c of [baseCanvas, inkCanvas]) {
       c.style.width = width + 'px';
@@ -39,10 +40,13 @@
     if (ink) { ink.imageSmoothingEnabled = true; ink.imageSmoothingQuality = 'high'; }
   }
 
+  // Resize -> reflow canvases then repaint background
+  window.addEventListener('resize', () => { fitCanvas(); try { drawBackground(); } catch(_) {} });
+  // Initial size; background will be painted later after variables init
+  fitCanvas();
+
   window.addEventListener('resize', fitCanvas);
   fitCanvas();
-  // Ensure background persists through resizes
-  drawBackground();
 
   let ws;
   let reconnectTimer = null;
@@ -180,6 +184,7 @@
 
   function clearCanvas() {
     if (!base || !ink) return;
+    if (DEBUG) console.log('[receiver] clearCanvas');
     drawBackground();
     ink.save();
     ink.setTransform(1, 0, 0, 1, 0, 0);
@@ -188,6 +193,7 @@
   }
 
   function drawBackground() {
+    if (DEBUG) console.log('[receiver] drawBackground', { mode: bgMode, hasImg: !!bgImage, cw: baseCanvas.width, ch: baseCanvas.height });
     base.save();
     base.setTransform(1, 0, 0, 1, 0, 0);
     if (bgMode === 'image' && bgImage) {
@@ -197,6 +203,7 @@
       let sx = 0, sy = 0, sWidth = sw, sHeight = sh;
       if (sRatio > cRatio) { sWidth = sh * cRatio; sx = (sw - sWidth) / 2; }
       else if (sRatio < cRatio) { sHeight = sw / cRatio; sy = (sh - sHeight) / 2; }
+      if (DEBUG) console.log('[receiver] drawBackground cover', { sw, sh, cw, ch, sx, sy, sWidth, sHeight, sRatio, cRatio });
       base.drawImage(bgImage, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
     } else {
       base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
@@ -205,6 +212,7 @@
   }
 
   function applyConfig(data) {
+    if (DEBUG) console.log('[receiver] applyConfig', data);
     if (data.bgReceiver) {
       if (typeof data.bgReceiver === 'string') { bgMode = data.bgReceiver; bgImage = null; clearCanvas(); }
       else if (data.bgReceiver.mode === 'image' && data.bgReceiver.url) {
@@ -216,25 +224,27 @@
           try { candidates.push(new URL(inUrl, location.href).href); } catch(_) {}
           try { candidates.push(new URL('../' + inUrl, location.href).href); } catch(_) {}
         }
+        if (DEBUG) console.log('[receiver] bgReceiver candidates', candidates);
         (async () => {
           for (const url of candidates) {
             try {
               const isHttp = /^https?:/i.test(url);
               if (isHttp && typeof createImageBitmap === 'function') {
                 const bmp = await createImageBitmap(await (await fetch(url)).blob());
-                bgImage = bmp; bgMode = 'image'; clearCanvas(); return;
+                bgImage = bmp; bgMode = 'image'; if (DEBUG) console.log('[receiver] bg loaded via bitmap', url, { w: bmp.width, h: bmp.height }); clearCanvas(); return;
               } else {
                 // For file:// (and as a safe fallback), use Image element loader
                 await new Promise((res, rej) => {
                   const img = new Image();
-                  img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); res(); };
+                  img.onload = () => { bgImage = img; bgMode = 'image'; if (DEBUG) console.log('[receiver] bg loaded via Image', url, { w: img.naturalWidth, h: img.naturalHeight }); clearCanvas(); res(); };
                   img.onerror = rej;
                   img.src = url;
                 });
                 return;
               }
-            } catch(_) { /* try next candidate */ }
+            } catch(err) { if (DEBUG) console.log('[receiver] bg load failed', url, err?.message || err); /* try next candidate */ }
           }
+          if (DEBUG) console.log('[receiver] bg load all candidates failed; fallback white');
           bgMode = 'white'; bgImage = null; clearCanvas();
         })();
       }
@@ -243,6 +253,7 @@
       const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100)));
       const factor = v / 100;
       if (canvasBox) canvasBox.style.transform = `scale(${factor})`;
+      if (DEBUG) console.log('[receiver] scaleReceiver applied', { v, factor });
     }
   }
 
@@ -422,13 +433,9 @@
     const loop = () => {
       if (frameVersion !== lastDrawnVersion && currentBitmap) {
         // Draw background then latest bitmap to base layer
-        base.save();
-        base.setTransform(1, 0, 0, 1, 0, 0);
-        if (bgMode === 'image' && bgImage) {
-          const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
-          base.drawImage(bgImage, 0, 0, sw, sh, 0, 0, baseCanvas.width, baseCanvas.height);
-        } else { base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height); }
+        try { drawBackground(); } catch(_) {}
         const srcW = currentBitmap.width || currentBitmap.naturalWidth; const srcH = currentBitmap.height || currentBitmap.naturalHeight;
+        base.save(); base.setTransform(1,0,0,1,0,0);
         base.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, baseCanvas.width, baseCanvas.height);
         base.restore();
         // Clear ink to prevent double-darkening when a fresh frame arrives
