@@ -136,11 +136,15 @@
     lastX = x; lastY = y;
     points = [{ x, y }];
     // Realtime stroke start (WebSocket only)
-    if (wsReady) {
+    if (wsReady || (httpFallback && SERVER_URL)) {
       const nx = x / canvas.width, ny = y / canvas.height;
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       currentStrokeId = id;
-      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx })); } catch (_) {}
+      if (wsReady) {
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx })); } catch (_) {}
+      } else {
+        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx });
+      }
     }
   }
 
@@ -178,10 +182,14 @@
     // 描画中は間引いて送信
     maybeSendFrame();
 
-    // Realtime stroke point (WebSocket only)
-    if (wsReady && currentStrokeId) {
+    // Realtime stroke point
+    if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       const nx = x / canvas.width, ny = y / canvas.height;
-      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny })); } catch (_) {}
+      if (wsReady) {
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny })); } catch (_) {}
+      } else {
+        queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny });
+      }
     }
   }
 
@@ -213,9 +221,14 @@
     // 最終フレーム送信
     sendFrame(true);
 
-    // Realtime stroke end (WebSocket only)
-    if (wsReady && currentStrokeId) {
-      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId })); } catch (_) {}
+    // Realtime stroke end
+    if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
+      if (wsReady) {
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId })); } catch (_) {}
+      } else {
+        postStrokeBatchFlush();
+        postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId });
+      }
       currentStrokeId = null;
     }
   }
@@ -257,8 +270,35 @@
     sendFrame(true);
     if (wsReady) {
       try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
+    } else if (httpFallback && SERVER_URL) {
+      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   });
+
+  // ---- HTTP stroke batching helpers ----
+  let postQueue = [];
+  let postTimer = null;
+  function postStroke(ev) {
+    const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+    fetch(`${httpBase.replace(/\/$/, '')}/stroke?channel=${encodeURIComponent(CHANNEL)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev), keepalive: true
+    }).catch(() => {});
+  }
+  function queuePoint(ev) {
+    postQueue.push(ev);
+    if (!postTimer) postTimer = setTimeout(postStrokeBatchFlush, 40); // ~25fps network cadence
+  }
+  function postStrokeBatchFlush() {
+    if (!postQueue.length) { if (postTimer) { clearTimeout(postTimer); postTimer = null; } return; }
+    const batch = postQueue;
+    postQueue = [];
+    const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+    fetch(`${httpBase.replace(/\/$/, '')}/stroke?channel=${encodeURIComponent(CHANNEL)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch }), keepalive: true
+    }).catch(() => {});
+    if (postTimer) { clearTimeout(postTimer); postTimer = null; }
+  }
 
   // 保存（PNG ダウンロード）
   saveBtn?.addEventListener('click', () => {

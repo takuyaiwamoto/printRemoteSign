@@ -15,11 +15,11 @@ app.use(express.json({ limit: '20mb' }));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-// channel => { lastFrame: string | null, clients: Set<{ws, role}> }
+// channel => { lastFrame: string | null, clients: Set<{ws, role}>, sse: Set<res> }
 const channels = new Map();
 
 function getChannel(name) {
-  if (!channels.has(name)) channels.set(name, { lastFrame: null, clients: new Set() });
+  if (!channels.has(name)) channels.set(name, { lastFrame: null, clients: new Set(), sse: new Set() });
   return channels.get(name);
 }
 
@@ -28,6 +28,14 @@ function broadcast(channel, data, predicate = () => true) {
     if (c.ws.readyState === 1 && predicate(c)) {
       try { c.ws.send(data); } catch (_) {}
     }
+  }
+}
+
+function broadcastSSE(channel, eventObj) {
+  const payload = `event: ${eventObj.type}\n` +
+                  `data: ${JSON.stringify(eventObj)}\n\n`;
+  for (const res of channel.sse) {
+    try { res.write(payload); } catch (_) {}
   }
 }
 
@@ -58,6 +66,7 @@ wss.on('connection', (ws, req) => {
       ch.lastFrame = msg.data;
       const txt = JSON.stringify({ type: 'frame', data: msg.data });
       broadcast(ch, txt, (c) => c.role === 'receiver');
+      broadcastSSE(ch, { type: 'frame', data: msg.data });
       return;
     }
 
@@ -67,14 +76,15 @@ wss.on('connection', (ws, req) => {
       if (!msg.phase) return;
       const relay = JSON.stringify(msg);
       broadcast(ch, relay, (c) => c.role === 'receiver');
+      broadcastSSE(ch, msg);
       return;
     }
 
     if (msg.type === 'clear') {
       const relay = JSON.stringify({ type: 'clear' });
       broadcast(ch, relay, (c) => c.role === 'receiver');
-      // Also reset lastFrame so new receivers start blank
-      ch.lastFrame = null;
+      broadcastSSE(ch, { type: 'clear' });
+      ch.lastFrame = null; // new receivers start blank
       return;
     }
   });
@@ -86,6 +96,24 @@ wss.on('connection', (ws, req) => {
 
 app.get('/', (_req, res) => {
   res.type('text/plain').send('OK: drawing-relay-server');
+});
+
+// Server-Sent Events endpoint for receivers behind WS-blocking proxies
+app.get('/events', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+  ch.sse.add(res);
+  // hello
+  try { res.write(`event: hello\ndata: ${JSON.stringify({ channel: channelName })}\n\n`); } catch (_) {}
+  if (ch.lastFrame) {
+    try { res.write(`event: frame\ndata: ${JSON.stringify({ type:'frame', data: ch.lastFrame })}\n\n`); } catch (_) {}
+  }
+  const keep = setInterval(() => { try { res.write(':keep-alive\n\n'); } catch (_) {} }, 15000);
+  req.on('close', () => { clearInterval(keep); ch.sse.delete(res); });
 });
 
 // HTTP fallback endpoints (optional). Useful when proxies block WebSockets.
@@ -105,6 +133,34 @@ app.post('/frame', (req, res) => {
   ch.lastFrame = data;
   const txt = JSON.stringify({ type: 'frame', data });
   broadcast(ch, txt, (c) => c.role === 'receiver');
+  broadcastSSE(ch, { type: 'frame', data });
+  res.json({ ok: true });
+});
+
+// HTTP fallback for strokes: accepts single or batched events
+app.post('/stroke', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  const body = req.body || {};
+  const events = Array.isArray(body.batch) ? body.batch : [body];
+  for (const e of events) {
+    if (!e || e.type !== 'stroke' || !e.phase) continue;
+    const msg = { type: 'stroke', phase: e.phase, id: e.id, nx: e.nx, ny: e.ny, color: e.color, size: e.size };
+    const txt = JSON.stringify(msg);
+    broadcast(ch, txt, (c) => c.role === 'receiver');
+    broadcastSSE(ch, msg);
+  }
+  res.json({ ok: true });
+});
+
+app.post('/clear', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  const msg = { type: 'clear' };
+  const txt = JSON.stringify(msg);
+  broadcast(ch, txt, (c) => c.role === 'receiver');
+  broadcastSSE(ch, msg);
+  ch.lastFrame = null;
   res.json({ ok: true });
 });
 

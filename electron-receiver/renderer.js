@@ -39,6 +39,7 @@
   let reconnectTimer = null;
   let lastInfo = '';
   let httpPollTimer = null;
+  let es = null; // EventSource fallback
 
   // Smoother rendering pipeline: coalesce frames, decode off-thread, draw on RAF
   let latestDataURL = null;
@@ -72,13 +73,14 @@
     ws.binaryType = 'arraybuffer';
     setStatus('接続中…');
 
-    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); };
+    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); stopSSE(); };
     ws.onclose = () => {
       setStatus('切断、再接続待ち…');
       if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1000);
       startHttpPolling();
+      startSSE();
     };
-    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); };
+    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); startSSE(); };
     ws.onmessage = async (ev) => {
       let msg;
       try {
@@ -128,6 +130,31 @@
 
   function stopHttpPolling() {
     if (httpPollTimer) { clearInterval(httpPollTimer); httpPollTimer = null; }
+  }
+
+  function startSSE() {
+    if (es) return;
+    const httpBase = SERVER.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+    const url = `${httpBase.replace(/\/$/, '')}/events?channel=${encodeURIComponent(CHANNEL)}`;
+    try {
+      es = new EventSource(url, { withCredentials: false });
+    } catch (_) {
+      return;
+    }
+    setStatus('SSE接続中…');
+    es.addEventListener('hello', () => setStatus('受信待機 (SSE)'));
+    es.addEventListener('frame', (ev) => {
+      try { const j = JSON.parse(ev.data); if (j && j.data) ingestFrame(j.data); } catch (_) {}
+    });
+    es.addEventListener('stroke', (ev) => {
+      try { handleStroke(JSON.parse(ev.data)); } catch (_) {}
+    });
+    es.addEventListener('clear', () => { clearCanvas(); strokes.clear(); });
+    es.onerror = () => { /* will auto-retry; keep http polling too */ };
+  }
+
+  function stopSSE() {
+    if (es) { try { es.close(); } catch (_) {}; es = null; }
   }
 
   function normToCanvas(nx, ny) {
