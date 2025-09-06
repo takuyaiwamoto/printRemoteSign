@@ -14,6 +14,7 @@
   const saveBtn = document.getElementById('save');
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
+  const clearSideBtn = document.getElementById('btn-clear');
 
   let isDrawing = false;
   let lastX = 0;
@@ -313,6 +314,21 @@
       fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   });
+  clearSideBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
+    // 直接実行（ヘッダが無い場合）
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    if (!realtimeEverUsed) sendFrame(true);
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
+    } else if (httpFallback && SERVER_URL) {
+      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+    }
+  })());
 
   // ---- HTTP stroke batching helpers ----
   let postQueue = [];

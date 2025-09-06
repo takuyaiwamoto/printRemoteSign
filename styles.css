@@ -35,10 +35,11 @@ body {
 
 .stage {
   display: grid;
-  grid-template-columns: 1fr auto; /* キャンバス + 右ツール */
+  grid-template-columns: auto auto; /* キャンバス + 右ツール */
   align-items: start;
-  justify-items: center;
-  gap: 12px 16px;
+  justify-content: center; /* 2カラム全体を中央寄せ */
+  justify-items: stretch;
+  gap: 12px 8px; /* 横の隙間を狭く */
   padding: 16px;
 }
 
@@ -64,11 +65,16 @@ canvas {
   align-self: stretch;
   display: grid;
   grid-auto-flow: column; /* 太さと色を横並びの縦列に */
-  gap: 12px;
+  gap: 8px; /* 列間も少し詰める */
+  justify-self: start; /* キャンバス側へ寄せる */
+  align-items: start; /* 縦方向で余白を作らない */
 }
 .side-tools .group {
   display: grid;
-  gap: 10px;
+  gap: 6px; /* 縦の隙間を詰める */
+  align-content: start; /* 余白で引き伸ばさない */
+  justify-items: center;
+  grid-auto-rows: min-content;
 }
 .size-btn, .color-btn {
   appearance: none;
@@ -79,7 +85,18 @@ canvas {
   display: grid; place-items: center;
   cursor: pointer;
 }
+.action-btn { /* 全削除 */
+  appearance: none;
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-weight: 700;
+  color: #ef4444; /* 赤系 */
+  cursor: pointer;
+}
 .size-btn:hover, .color-btn:hover { background: #f3f4f6; }
+.action-btn:hover { background: #fef2f2; }
 .size-btn.active, .color-btn.active { outline: 2px solid #60a5fa; outline-offset: 2px; }
 .size-btn .stroke {
   width: 26px; height: 26px;
