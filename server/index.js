@@ -1,6 +1,7 @@
 import http from 'http';
 import express from 'express';
 import { WebSocketServer } from 'ws';
+const RELAY_VERSION = '0.6.0';
 
 const app = express();
 // Lightweight CORS + JSON body for HTTP fallback
@@ -95,7 +96,11 @@ wss.on('connection', (ws, req) => {
 });
 
 app.get('/', (_req, res) => {
-  res.type('text/plain').send('OK: drawing-relay-server');
+  res.type('text/plain').send(`OK: drawing-relay-server v${RELAY_VERSION}`);
+});
+
+app.get('/version', (_req, res) => {
+  res.json({ name: 'drawing-relay-server', version: RELAY_VERSION });
 });
 
 // Server-Sent Events endpoint for receivers behind WS-blocking proxies

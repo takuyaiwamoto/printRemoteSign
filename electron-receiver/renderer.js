@@ -222,10 +222,10 @@
           s.lastPt = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }; // m1
         } else if (s.ended && s.points.length === 1) {
           const p = s.points[0];
-          ctx.beginPath();
-          ctx.fillStyle = s.color;
-          ctx.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
-          ctx.fill();
+          ink.beginPath();
+          ink.fillStyle = s.color;
+          ink.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+          ink.fill();
           strokes.delete(id);
           continue;
         } else {
@@ -233,14 +233,14 @@
         }
       }
 
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.sizeCss * DPR;
+      ink.lineJoin = 'round';
+      ink.lineCap = 'round';
+      ink.strokeStyle = s.color;
+      ink.lineWidth = s.sizeCss * DPR;
 
       let drew = false;
-      ctx.beginPath();
-      ctx.moveTo(s.lastPt.x, s.lastPt.y);
+      ink.beginPath();
+      ink.moveTo(s.lastPt.x, s.lastPt.y);
 
       // Helper to sample quadratic Bezier
       const qPoint = (m1, p1, m2, t) => {
@@ -260,14 +260,16 @@
 
         const segLen = Math.hypot(m2.x - m1.x, m2.y - m1.y) + 1e-3;
         const stepPx = Math.max(0.8 * DPR, 0.5 * s.sizeCss * DPR);
-        const dt = Math.min(0.35, Math.max(0.04, stepPx / segLen));
+        const dt = Math.min(0.35, Math.max(0.02, stepPx / segLen));
 
-        // advance fractional t with small steps in this frame, but not beyond readySegment
-        const endT = (i < readySegment) ? 1 : 1; // if exactly target segment, we may still only partially progress; handled by time check below
-        while (s.t < endT) {
-          const nextT = Math.min(1, s.t + dt);
+        // Desired progress within this segment based on time buffer
+        const dur = Math.max(1, (p2.time || 0) - (p1.time || 0));
+        const timeT = Math.max(0, Math.min(1, (target - (p1.time || 0)) / dur));
+        const desiredT = (i < readySegment) ? 1 : timeT;
+        while (s.t < desiredT - 1e-6) {
+          const nextT = Math.min(desiredT, s.t + dt);
           const np = qPoint(m1, p1, m2, nextT);
-          ctx.lineTo(np.x, np.y);
+          ink.lineTo(np.x, np.y);
           s.lastPt = np;
           s.t = nextT;
           drew = true;
@@ -284,7 +286,7 @@
         }
       }
 
-      if (drew) ctx.stroke();
+      if (drew) ink.stroke();
 
       // Clean up ended strokes when all segments consumed and last segment finished
       const lastSegment = s.points.length - 1;
@@ -334,16 +336,13 @@
     rafRunning = true;
     const loop = () => {
       if (frameVersion !== lastDrawnVersion && currentBitmap) {
-        // Draw latest bitmap scaled to canvas
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        // Many frames already contain white background, but ensure full cover
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Draw latest bitmap scaled to base layer (do not touch ink layer)
+        base.save();
+        base.setTransform(1, 0, 0, 1, 0, 0);
         const srcW = currentBitmap.width || currentBitmap.naturalWidth;
         const srcH = currentBitmap.height || currentBitmap.naturalHeight;
-        ctx.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
+        base.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, baseCanvas.width, baseCanvas.height);
+        base.restore();
         lastDrawnVersion = frameVersion;
       }
       // Always process stroke queues toward target time

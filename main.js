@@ -1,4 +1,6 @@
 (() => {
+  const SENDER_VERSION = '0.6.0';
+  try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
 
@@ -26,7 +28,8 @@
   let ws = null;
   let wsReady = false;
   let lastSent = 0;
-  const SEND_INTERVAL_MS = 150; // throttle during drawing
+  const SEND_INTERVAL_MS = 150; // throttle during drawing (unused if disabled)
+  const SEND_FRAMES_DURING_DRAW = false; // 逐次描画は座標で行うため、描画中のフレーム送信は既定で無効化
   let httpFallback = false;
   let currentStrokeId = null;
 
@@ -179,8 +182,8 @@
 
     lastX = x;
     lastY = y;
-    // 描画中は間引いて送信
-    maybeSendFrame();
+    // 描画中のフレーム送信は既定で無効（座標ストリームを優先）
+    if (SEND_FRAMES_DURING_DRAW) maybeSendFrame();
 
     // Realtime stroke point
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
