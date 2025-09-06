@@ -178,62 +178,90 @@
     const target = now - STROKE_BUFFER_MS;
 
     for (const [id, s] of strokes) {
-      // Draw any segments whose endpoint time <= target
-      while (s.points.length - 1 > s.drawnUntil) {
-        const i = s.drawnUntil + 1; // candidate new endpoint index
-        const pt = s.points[i];
-        if (pt.time > target) break;
-
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = s.sizeCss * DPR;
-
-        if (i === 1) {
-          // First segment: simple line p0->p1
-          const p0 = s.points[0], p1 = s.points[1];
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p1.x, p1.y);
-          ctx.stroke();
-        } else {
-          // Middle segments: quadratic bezier between midpoints
-          const p0 = s.points[i - 2];
-          const p1 = s.points[i - 1];
-          const p2 = s.points[i];
-          const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-          const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-          ctx.beginPath();
-          ctx.moveTo(m1.x, m1.y);
-          ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
-          ctx.stroke();
+      // We start rendering once we have at least 3 points and the third point is within target
+      const readySegment = (() => {
+        for (let i = s.points.length - 1; i >= 2; i--) {
+          if (s.points[i].time <= target) return i; // segment defined by (i-2,i-1,i)
         }
-        s.drawnUntil = i;
-      }
+        return 0;
+      })();
 
-      // Finalize ended strokes when all points rendered
-      if (s.ended && s.drawnUntil >= s.points.length - 1) {
-        const n = s.points.length;
-        if (n >= 3) {
-          const p0 = s.points[n - 3];
-          const p1 = s.points[n - 2];
-          const p2 = s.points[n - 1];
-          const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-          ctx.lineJoin = 'round';
-          ctx.lineCap = 'round';
-          ctx.strokeStyle = s.color;
-          ctx.lineWidth = s.sizeCss * DPR;
-          ctx.beginPath();
-          ctx.moveTo(mPrev.x, mPrev.y);
-          ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
-          ctx.stroke();
-        } else if (n === 1) {
+      // Initialize per-stroke cursor
+      if (s.curIndex === undefined) {
+        if (readySegment >= 2) {
+          s.curIndex = 2; // working on segment using points[0],points[1],points[2]
+          s.t = 0;
+          const p0 = s.points[0], p1 = s.points[1];
+          s.lastPt = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }; // m1
+        } else if (s.ended && s.points.length === 1) {
           const p = s.points[0];
           ctx.beginPath();
           ctx.fillStyle = s.color;
           ctx.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
           ctx.fill();
+          strokes.delete(id);
+          continue;
+        } else {
+          continue; // wait for enough buffered points
         }
+      }
+
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = s.sizeCss * DPR;
+
+      let drew = false;
+      ctx.beginPath();
+      ctx.moveTo(s.lastPt.x, s.lastPt.y);
+
+      // Helper to sample quadratic Bezier
+      const qPoint = (m1, p1, m2, t) => {
+        const a = 1 - t;
+        const x = a * a * m1.x + 2 * a * t * p1.x + t * t * m2.x;
+        const y = a * a * m1.y + 2 * a * t * p1.y + t * t * m2.y;
+        return { x, y };
+      };
+
+      while (s.curIndex <= readySegment) {
+        const i = s.curIndex;
+        const p0 = s.points[i - 2];
+        const p1 = s.points[i - 1];
+        const p2 = s.points[i];
+        const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+        const segLen = Math.hypot(m2.x - m1.x, m2.y - m1.y) + 1e-3;
+        const stepPx = Math.max(0.8 * DPR, 0.5 * s.sizeCss * DPR);
+        const dt = Math.min(0.35, Math.max(0.04, stepPx / segLen));
+
+        // advance fractional t with small steps in this frame, but not beyond readySegment
+        const endT = (i < readySegment) ? 1 : 1; // if exactly target segment, we may still only partially progress; handled by time check below
+        while (s.t < endT) {
+          const nextT = Math.min(1, s.t + dt);
+          const np = qPoint(m1, p1, m2, nextT);
+          ctx.lineTo(np.x, np.y);
+          s.lastPt = np;
+          s.t = nextT;
+          drew = true;
+          // If we reached 1, move to next segment
+          if (s.t >= 1 - 1e-6) break;
+        }
+
+        if (s.t >= 1 - 1e-6) {
+          s.curIndex++;
+          s.t = 0;
+          s.lastPt = { ...m2 };
+        } else {
+          break;
+        }
+      }
+
+      if (drew) ctx.stroke();
+
+      // Clean up ended strokes when all segments consumed and last segment finished
+      const lastSegment = s.points.length - 1;
+      if (s.ended && s.curIndex > lastSegment) {
         strokes.delete(id);
       }
     }
