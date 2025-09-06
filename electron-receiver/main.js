@@ -12,6 +12,7 @@ function createWindow() {
 
   const server = process.env.SERVER_URL || fileCfg.server || 'ws://localhost:8787';
   const channel = process.env.CHANNEL || fileCfg.channel || 'default';
+  const bufferMs = Number(process.env.BUFFER_MS || fileCfg.bufferMs || 300);
 
   const win = new BrowserWindow({
     width: 900,
@@ -26,7 +27,7 @@ function createWindow() {
 
   win.setMenuBarVisibility(false);
   win.loadFile('receiver.html', {
-    query: { server, channel }
+    query: { server, channel, buffer: String(bufferMs) }
   });
 }
 

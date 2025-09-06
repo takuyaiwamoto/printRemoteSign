@@ -51,7 +51,7 @@
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
   const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
-  const STROKE_BUFFER_MS = 120; // 小さな遅延で滑らかさを優先
+  const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 300))));
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
