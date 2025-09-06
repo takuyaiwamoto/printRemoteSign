@@ -41,6 +41,8 @@
 
   window.addEventListener('resize', fitCanvas);
   fitCanvas();
+  // Ensure background persists through resizes
+  drawBackground();
 
   let ws;
   let reconnectTimer = null;
@@ -178,20 +180,28 @@
 
   function clearCanvas() {
     if (!base || !ink) return;
-    base.save();
-    base.setTransform(1, 0, 0, 1, 0, 0);
-    if (bgMode === 'image' && bgImage) {
-      const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
-      base.drawImage(bgImage, 0, 0, sw, sh, 0, 0, baseCanvas.width, baseCanvas.height);
-    } else {
-      base.fillStyle = '#ffffff';
-      base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-    }
-    base.restore();
+    drawBackground();
     ink.save();
     ink.setTransform(1, 0, 0, 1, 0, 0);
     ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
     ink.restore();
+  }
+
+  function drawBackground() {
+    base.save();
+    base.setTransform(1, 0, 0, 1, 0, 0);
+    if (bgMode === 'image' && bgImage) {
+      const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
+      const cw = baseCanvas.width, ch = baseCanvas.height;
+      const sRatio = sw / sh, cRatio = cw / ch;
+      let sx = 0, sy = 0, sWidth = sw, sHeight = sh;
+      if (sRatio > cRatio) { sWidth = sh * cRatio; sx = (sw - sWidth) / 2; }
+      else if (sRatio < cRatio) { sHeight = sw / cRatio; sy = (sh - sHeight) / 2; }
+      base.drawImage(bgImage, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
+    } else {
+      base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+    }
+    base.restore();
   }
 
   function applyConfig(data) {
@@ -209,14 +219,21 @@
         (async () => {
           for (const url of candidates) {
             try {
-              if (typeof createImageBitmap === 'function') {
+              const isHttp = /^https?:/i.test(url);
+              if (isHttp && typeof createImageBitmap === 'function') {
                 const bmp = await createImageBitmap(await (await fetch(url)).blob());
                 bgImage = bmp; bgMode = 'image'; clearCanvas(); return;
               } else {
-                await new Promise((res, rej) => { const img = new Image(); img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); res(); }; img.onerror = rej; img.src = url; });
+                // For file:// (and as a safe fallback), use Image element loader
+                await new Promise((res, rej) => {
+                  const img = new Image();
+                  img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); res(); };
+                  img.onerror = rej;
+                  img.src = url;
+                });
                 return;
               }
-            } catch(_) { /* try next */ }
+            } catch(_) { /* try next candidate */ }
           }
           bgMode = 'white'; bgImage = null; clearCanvas();
         })();
