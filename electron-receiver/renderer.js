@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.3';
+  const RECEIVER_VERSION = '0.6.4';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -60,7 +60,7 @@
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
   const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
-  const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 500))));
+  const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 200))));
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {

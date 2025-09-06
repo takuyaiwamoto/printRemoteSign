@@ -1,5 +1,5 @@
 {
   "server": "wss://printremotesign.onrender.com",
   "channel": "default",
-  "bufferMs": 500
+  "bufferMs": 200
 }
