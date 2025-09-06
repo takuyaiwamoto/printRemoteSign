@@ -45,7 +45,8 @@
     }
     if (httpFallback && SERVER_URL) {
       // HTTP fallback: POST the latest frame
-      const u = `${SERVER_URL.replace(/\/$/, '')}/frame?channel=${encodeURIComponent(CHANNEL)}`;
+      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      const u = `${httpBase.replace(/\/$/, '')}/frame?channel=${encodeURIComponent(CHANNEL)}`;
       fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dataURL }) }).catch(() => {});
     }
   }

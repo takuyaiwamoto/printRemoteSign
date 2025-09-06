@@ -86,7 +86,8 @@
 
   function startHttpPolling() {
     if (httpPollTimer) return;
-    const u = `${SERVER.replace(/\/$/, '')}/last?channel=${encodeURIComponent(CHANNEL)}`;
+    const httpBase = SERVER.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+    const u = `${httpBase.replace(/\/$/, '')}/last?channel=${encodeURIComponent(CHANNEL)}`;
     const tick = async () => {
       try {
         const r = await fetch(u, { cache: 'no-store' });
