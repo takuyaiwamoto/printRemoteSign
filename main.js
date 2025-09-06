@@ -25,23 +25,29 @@
   let wsReady = false;
   let lastSent = 0;
   const SEND_INTERVAL_MS = 150; // throttle during drawing
+  let httpFallback = false;
 
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${SERVER_URL.replace(/^http/, 'ws').replace(/\/$/, '')}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
-    try { ws = new WebSocket(url); } catch (_) { return; }
-    ws.onopen = () => { wsReady = true; sendFrame(true); };
+    try { ws = new WebSocket(url); } catch (_) { httpFallback = !!SERVER_URL; return; }
+    ws.onopen = () => { wsReady = true; httpFallback = false; sendFrame(true); };
     ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1000); };
-    ws.onerror = () => { wsReady = false; };
+    ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; };
   }
   connectWS();
 
   function sendFrame(force = false) {
-    if (!wsReady) return;
-    try {
-      const dataURL = canvas.toDataURL('image/png');
-      ws.send(JSON.stringify({ type: 'frame', data: dataURL }));
-    } catch (_) {}
+    const dataURL = canvas.toDataURL('image/png');
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'frame', data: dataURL })); } catch (_) {}
+      return;
+    }
+    if (httpFallback && SERVER_URL) {
+      // HTTP fallback: POST the latest frame
+      const u = `${SERVER_URL.replace(/\/$/, '')}/frame?channel=${encodeURIComponent(CHANNEL)}`;
+      fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dataURL }) }).catch(() => {});
+    }
   }
   function maybeSendFrame() {
     const now = Date.now();

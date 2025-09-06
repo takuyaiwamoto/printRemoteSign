@@ -3,6 +3,15 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 
 const app = express();
+// Lightweight CORS + JSON body for HTTP fallback
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+app.use(express.json({ limit: '20mb' }));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -62,8 +71,27 @@ app.get('/', (_req, res) => {
   res.type('text/plain').send('OK: drawing-relay-server');
 });
 
+// HTTP fallback endpoints (optional). Useful when proxies block WebSockets.
+app.get('/last', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  res.json({ type: 'frame', data: ch.lastFrame || null });
+});
+
+app.post('/frame', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  const data = req.body?.data;
+  if (typeof data !== 'string' || data.length > 10 * 1024 * 1024) {
+    return res.status(400).json({ error: 'invalid_or_too_large' });
+  }
+  ch.lastFrame = data;
+  const txt = JSON.stringify({ type: 'frame', data });
+  broadcast(ch, txt, (c) => c.role === 'receiver');
+  res.json({ ok: true });
+});
+
 const PORT = process.env.PORT || 8787;
 server.listen(PORT, () => {
   console.log(`Relay server listening on :${PORT}`);
 });
-

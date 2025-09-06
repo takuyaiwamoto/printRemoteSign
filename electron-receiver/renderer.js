@@ -38,6 +38,7 @@
   let ws;
   let reconnectTimer = null;
   let lastInfo = '';
+  let httpPollTimer = null;
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
@@ -51,18 +52,20 @@
     try {
       ws = new WebSocket(url);
     } catch (e) {
-      setStatus('接続エラー');
+      setStatus('接続エラー (WS)');
+      startHttpPolling();
       return;
     }
     ws.binaryType = 'arraybuffer';
     setStatus('接続中…');
 
-    ws.onopen = () => { setStatus('受信待機'); };
+    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); };
     ws.onclose = () => {
       setStatus('切断、再接続待ち…');
       if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1000);
+      startHttpPolling();
     };
-    ws.onerror = () => setStatus('通信エラー');
+    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); };
     ws.onmessage = async (ev) => {
       let msg;
       try {
@@ -81,6 +84,28 @@
     };
   }
 
+  function startHttpPolling() {
+    if (httpPollTimer) return;
+    const u = `${SERVER.replace(/\/$/, '')}/last?channel=${encodeURIComponent(CHANNEL)}`;
+    const tick = async () => {
+      try {
+        const r = await fetch(u, { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.type === 'frame' && typeof j.data === 'string' && j.data) {
+            drawDataURL(j.data);
+          }
+        }
+      } catch (_) {}
+    };
+    httpPollTimer = setInterval(tick, 300);
+    tick();
+  }
+
+  function stopHttpPolling() {
+    if (httpPollTimer) { clearInterval(httpPollTimer); httpPollTimer = null; }
+  }
+
   function drawDataURL(dataURL) {
     const img = new Image();
     img.onload = () => {
@@ -96,4 +121,3 @@
 
   connect();
 })();
-
