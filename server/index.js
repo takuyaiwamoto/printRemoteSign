@@ -60,6 +60,23 @@ wss.on('connection', (ws, req) => {
       broadcast(ch, txt, (c) => c.role === 'receiver');
       return;
     }
+
+    // Realtime stroke relay (WebSocket only). Small JSON messages.
+    if (msg.type === 'stroke') {
+      // Basic validation
+      if (!msg.phase) return;
+      const relay = JSON.stringify(msg);
+      broadcast(ch, relay, (c) => c.role === 'receiver');
+      return;
+    }
+
+    if (msg.type === 'clear') {
+      const relay = JSON.stringify({ type: 'clear' });
+      broadcast(ch, relay, (c) => c.role === 'receiver');
+      // Also reset lastFrame so new receivers start blank
+      ch.lastFrame = null;
+      return;
+    }
   });
 
   ws.on('close', () => {

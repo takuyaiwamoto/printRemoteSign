@@ -48,6 +48,10 @@
   let lastDrawnVersion = -1;
   let rafRunning = false;
 
+  // Realtime stroke rendering state
+  const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y}], lastX, lastY }
+  const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
+
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
     if (text !== lastInfo) {
@@ -88,6 +92,15 @@
       }
       if (msg.type === 'frame' && typeof msg.data === 'string') {
         ingestFrame(msg.data);
+        return;
+      }
+      if (msg.type === 'clear') {
+        clearCanvas();
+        return;
+      }
+      if (msg.type === 'stroke') {
+        handleStroke(msg);
+        return;
       }
     };
   }
@@ -113,6 +126,92 @@
 
   function stopHttpPolling() {
     if (httpPollTimer) { clearInterval(httpPollTimer); httpPollTimer = null; }
+  }
+
+  function normToCanvas(nx, ny) {
+    return { x: nx * canvas.width, y: ny * canvas.height };
+  }
+
+  function clearCanvas() {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  function handleStroke(msg) {
+    const phase = msg.phase;
+    if (!phase) return;
+    if (phase === 'start') {
+      const id = String(msg.id || Date.now());
+      const p = normToCanvas(msg.nx, msg.ny);
+      const s = {
+        color: msg.color || '#000',
+        sizeCss: Number(msg.size || 4),
+        points: [p],
+        lastX: p.x,
+        lastY: p.y,
+      };
+      strokes.set(id, s);
+      // dot for taps
+      ctx.beginPath();
+      ctx.fillStyle = s.color;
+      ctx.arc(p.x, p.y, (s.sizeCss * DPR) / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    const id = String(msg.id || '');
+    const s = strokes.get(id);
+    if (!s) return;
+    if (phase === 'point') {
+      const p = normToCanvas(msg.nx, msg.ny);
+      const dx = p.x - s.lastX, dy = p.y - s.lastY;
+      if (dx * dx + dy * dy < DIST_THRESH_SQ) return;
+      s.points.push(p);
+      const n = s.points.length;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = s.sizeCss * DPR;
+      if (n === 2) {
+        ctx.beginPath();
+        ctx.moveTo(s.points[0].x, s.points[0].y);
+        ctx.lineTo(s.points[1].x, s.points[1].y);
+        ctx.stroke();
+      } else if (n >= 3) {
+        const p0 = s.points[n - 3];
+        const p1 = s.points[n - 2];
+        const p2 = s.points[n - 1];
+        const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        ctx.beginPath();
+        ctx.moveTo(m1.x, m1.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+        ctx.stroke();
+      }
+      s.lastX = p.x; s.lastY = p.y;
+      return;
+    }
+    if (phase === 'end') {
+      const n = s.points.length;
+      if (n >= 3) {
+        const p0 = s.points[n - 3];
+        const p1 = s.points[n - 2];
+        const p2 = s.points[n - 1];
+        const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = s.sizeCss * DPR;
+        ctx.beginPath();
+        ctx.moveTo(mPrev.x, mPrev.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+        ctx.stroke();
+      }
+      strokes.delete(id);
+      return;
+    }
   }
 
   function ingestFrame(dataURL) {
@@ -172,5 +271,7 @@
     requestAnimationFrame(loop);
   }
 
+  // Clear once at start for stroke rendering background
+  clearCanvas();
   connect();
 })();

@@ -28,6 +28,7 @@
   let lastSent = 0;
   const SEND_INTERVAL_MS = 150; // throttle during drawing
   let httpFallback = false;
+  let currentStrokeId = null;
 
   function connectWS() {
     if (!SERVER_URL) return;
@@ -134,6 +135,13 @@
     const { x, y } = getPos(e);
     lastX = x; lastY = y;
     points = [{ x, y }];
+    // Realtime stroke start (WebSocket only)
+    if (wsReady) {
+      const nx = x / canvas.width, ny = y / canvas.height;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      currentStrokeId = id;
+      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx })); } catch (_) {}
+    }
   }
 
   function draw(e) {
@@ -169,6 +177,12 @@
     lastY = y;
     // 描画中は間引いて送信
     maybeSendFrame();
+
+    // Realtime stroke point (WebSocket only)
+    if (wsReady && currentStrokeId) {
+      const nx = x / canvas.width, ny = y / canvas.height;
+      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny })); } catch (_) {}
+    }
   }
 
   function endDraw() {
@@ -198,6 +212,12 @@
 
     // 最終フレーム送信
     sendFrame(true);
+
+    // Realtime stroke end (WebSocket only)
+    if (wsReady && currentStrokeId) {
+      try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId })); } catch (_) {}
+      currentStrokeId = null;
+    }
   }
 
   // 入力ハンドラ登録（Pointer / Mouse / Touch いずれでも動作）
@@ -235,6 +255,9 @@
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     sendFrame(true);
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
+    }
   });
 
   // 保存（PNG ダウンロード）
