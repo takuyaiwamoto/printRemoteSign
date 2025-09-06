@@ -47,6 +47,8 @@
   let lastInfo = '';
   let httpPollTimer = null;
   let es = null; // EventSource fallback
+  const toHttpBase = (u) => u.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://').replace(/\/$/, '');
+  const toWsBase = (u) => u.replace(/^http/, 'ws').replace(/\/$/, '');
 
   // Smoother rendering pipeline: coalesce frames, decode off-thread, draw on RAF
   let latestDataURL = null;
@@ -70,7 +72,7 @@
   }
 
   function connect() {
-    const url = `${SERVER.replace(/^http/, 'ws').replace(/\/$/, '')}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
+    const url = `${toWsBase(SERVER)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
     try {
       ws = new WebSocket(url);
     } catch (e) {
@@ -119,8 +121,8 @@
 
   function startHttpPolling() {
     if (httpPollTimer) return;
-    const httpBase = SERVER.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-    const u = `${httpBase.replace(/\/$/, '')}/last?channel=${encodeURIComponent(CHANNEL)}`;
+    const httpBase = toHttpBase(SERVER);
+    const u = `${httpBase}/last?channel=${encodeURIComponent(CHANNEL)}`;
     const tick = async () => {
       try {
         const r = await fetch(u, { cache: 'no-store' });
@@ -142,8 +144,8 @@
 
   function startSSE() {
     if (es) return;
-    const httpBase = SERVER.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-    const url = `${httpBase.replace(/\/$/, '')}/events?channel=${encodeURIComponent(CHANNEL)}`;
+    const httpBase = toHttpBase(SERVER);
+    const url = `${httpBase}/events?channel=${encodeURIComponent(CHANNEL)}`;
     try {
       es = new EventSource(url, { withCredentials: false });
     } catch (_) {

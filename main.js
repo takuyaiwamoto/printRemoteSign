@@ -34,9 +34,22 @@
   let currentStrokeId = null;
   let realtimeEverUsed = false; // 一度でも座標ストリームを使ったらフレーム送信を抑制
 
+  // --- Transport helpers -------------------------------------------------
+  const toHttpBase = (u) => u.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://').replace(/\/$/, '');
+  const toWsBase = (u) => u.replace(/^http/, 'ws').replace(/\/$/, '');
+  function wsSend(obj) {
+    if (!wsReady) return false;
+    try { ws.send(JSON.stringify(obj)); return true; } catch (_) { return false; }
+  }
+  function httpPost(path, body) {
+    if (!SERVER_URL) return;
+    const u = `${toHttpBase(SERVER_URL)}${path}?channel=${encodeURIComponent(CHANNEL)}`;
+    fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {});
+  }
+
   function connectWS() {
     if (!SERVER_URL) return;
-    const url = `${SERVER_URL.replace(/^http/, 'ws').replace(/\/$/, '')}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
+    const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
     try { ws = new WebSocket(url); } catch (_) { httpFallback = !!SERVER_URL; return; }
     ws.onopen = () => { wsReady = true; httpFallback = false; /* 首描画のためのフレーム送信は不要 */ };
     ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1000); };
@@ -46,16 +59,8 @@
 
   function sendFrame(force = false) {
     const dataURL = canvas.toDataURL('image/png');
-    if (wsReady) {
-      try { ws.send(JSON.stringify({ type: 'frame', data: dataURL })); } catch (_) {}
-      return;
-    }
-    if (httpFallback && SERVER_URL) {
-      // HTTP fallback: POST the latest frame
-      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-      const u = `${httpBase.replace(/\/$/, '')}/frame?channel=${encodeURIComponent(CHANNEL)}`;
-      fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dataURL }) }).catch(() => {});
-    }
+    if (wsSend({ type: 'frame', data: dataURL })) return;
+    if (httpFallback) httpPost('/frame', { data: dataURL });
   }
   function maybeSendFrame() {
     const now = Date.now();
@@ -285,10 +290,7 @@
   let postQueue = [];
   let postTimer = null;
   function postStroke(ev) {
-    const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-    fetch(`${httpBase.replace(/\/$/, '')}/stroke?channel=${encodeURIComponent(CHANNEL)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev), keepalive: true
-    }).catch(() => {});
+    httpPost('/stroke', ev);
   }
   function queuePoint(ev) {
     postQueue.push(ev);
@@ -298,10 +300,7 @@
     if (!postQueue.length) { if (postTimer) { clearTimeout(postTimer); postTimer = null; } return; }
     const batch = postQueue;
     postQueue = [];
-    const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-    fetch(`${httpBase.replace(/\/$/, '')}/stroke?channel=${encodeURIComponent(CHANNEL)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch }), keepalive: true
-    }).catch(() => {});
+    httpPost('/stroke', { batch });
     if (postTimer) { clearTimeout(postTimer); postTimer = null; }
   }
 
