@@ -60,6 +60,7 @@
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
   let bgMode = 'white';
   let bgImage = null; // ImageBitmap or HTMLImageElement
+  const canvasBox = document.getElementById('canvasBox');
 
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
@@ -197,18 +198,34 @@
     if (data.bgReceiver) {
       if (typeof data.bgReceiver === 'string') { bgMode = data.bgReceiver; bgImage = null; clearCanvas(); }
       else if (data.bgReceiver.mode === 'image' && data.bgReceiver.url) {
-        const url = data.bgReceiver.url;
+        const inUrl = data.bgReceiver.url;
+        const candidates = [];
+        if (/^https?:/i.test(inUrl)) {
+          candidates.push(inUrl);
+        } else {
+          try { candidates.push(new URL(inUrl, location.href).href); } catch(_) {}
+          try { candidates.push(new URL('../' + inUrl, location.href).href); } catch(_) {}
+        }
         (async () => {
-          try {
-            if (typeof createImageBitmap === 'function') {
-              const bmp = await createImageBitmap(await (await fetch(url)).blob());
-              bgImage = bmp; bgMode = 'image'; clearCanvas();
-            } else {
-              const img = new Image(); img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); }; img.src = url;
-            }
-          } catch(_) { bgMode = 'white'; bgImage = null; clearCanvas(); }
+          for (const url of candidates) {
+            try {
+              if (typeof createImageBitmap === 'function') {
+                const bmp = await createImageBitmap(await (await fetch(url)).blob());
+                bgImage = bmp; bgMode = 'image'; clearCanvas(); return;
+              } else {
+                await new Promise((res, rej) => { const img = new Image(); img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); res(); }; img.onerror = rej; img.src = url; });
+                return;
+              }
+            } catch(_) { /* try next */ }
+          }
+          bgMode = 'white'; bgImage = null; clearCanvas();
         })();
       }
+    }
+    if (typeof data.scaleReceiver === 'number') {
+      const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100)));
+      const factor = v / 100;
+      if (canvasBox) canvasBox.style.transform = `scale(${factor})`;
     }
   }
 

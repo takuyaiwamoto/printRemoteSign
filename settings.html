@@ -20,6 +20,13 @@
   </head>
   <body>
     <div class="settings">
+      <div style="display:grid; justify-items:center; margin-top:50px;">
+        <label style="display:grid; gap:6px; justify-items:center;">
+          <div><strong>受信側サイズ</strong> <span class="muted">（今の大きさ=100）</span></div>
+          <input id="scaleReceiver" type="range" min="1" max="100" value="50" style="width:320px;">
+          <div class="muted">現在: <span id="scaleVal">50</span>%</div>
+        </label>
+      </div>
       <div><strong>背景設定</strong> <span class="muted">（クリックで送信／即時反映）</span></div>
       <div class="row">
         <div class="panel" id="senderPanel">
@@ -65,16 +72,33 @@
         let ws = null;
         try { ws = new WebSocket(url); } catch(_) {}
 
+        function absoluteIfPossible(u){
+          if (!u) return u;
+          if (/^https?:/i.test(u)) return u;
+          if (location.protocol === 'http:' || location.protocol === 'https:') {
+            try { return new URL(u, location.href).href; } catch(_) { return u; }
+          }
+          return u; // file:// の場合はそのまま
+        }
         function sendConfig(part, mode, url){
           const data = {};
           if (mode === 'white') data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = 'white';
-          else data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = { mode: 'image', url };
+          else data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = { mode: 'image', url: absoluteIfPossible(url) };
           const msg = { type: 'config', data };
           if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
           // HTTP fallback
           fetch(`${SERVER_URL.replace(/^wss?:\/\//i, (m)=>m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`,
             { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) })
             .catch(()=>{});
+        }
+
+        function sendScaleReceiver(val){
+          const v = Math.max(1, Math.min(100, Math.round(val)));
+          const data = { scaleReceiver: v };
+          const msg = { type: 'config', data };
+          if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+          fetch(`${SERVER_URL.replace(/^wss?:\/\//i, (m)=>m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`,
+            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
         }
 
         document.querySelectorAll('.card').forEach(card => {
@@ -85,8 +109,15 @@
             sendConfig(target, mode, url);
           });
         });
+
+        const scaleEl = document.getElementById('scaleReceiver');
+        const scaleVal = document.getElementById('scaleVal');
+        let timer = null;
+        scaleEl.addEventListener('input', () => {
+          scaleVal.textContent = scaleEl.value;
+          clearTimeout(timer); timer = setTimeout(() => sendScaleReceiver(scaleEl.value), 100);
+        });
       })();
     </script>
   </body>
   </html>
-
