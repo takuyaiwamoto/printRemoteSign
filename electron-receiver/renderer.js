@@ -1,4 +1,5 @@
 (() => {
+  const RECEIVER_VERSION = '0.6.1';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -10,6 +11,7 @@
 
   serverLabel.textContent = SERVER;
   channelLabel.textContent = CHANNEL;
+  try { const v = document.getElementById('receiver-version'); if (v) v.textContent = `v${RECEIVER_VERSION}`; } catch (_) {}
 
   const baseCanvas = document.getElementById('base');
   const inkCanvas = document.getElementById('ink');
@@ -353,6 +355,13 @@
         const srcH = currentBitmap.height || currentBitmap.naturalHeight;
         base.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, baseCanvas.width, baseCanvas.height);
         base.restore();
+        // Clear ink to prevent double-darkening when a fresh frame arrives
+        if (ink && inkCanvas) {
+          ink.save();
+          ink.setTransform(1, 0, 0, 1, 0, 0);
+          ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+          ink.restore();
+        }
         lastDrawnVersion = frameVersion;
       }
       // Always process stroke queues toward target time

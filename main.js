@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.6.0';
+  const SENDER_VERSION = '0.6.1';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
