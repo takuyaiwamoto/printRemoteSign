@@ -14,6 +14,8 @@
   let isDrawing = false;
   let lastX = 0;
   let lastY = 0;
+  let points = [];
+  const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2); // 近すぎる点は無視（手ぶれ低減）
   let brushSizeCssPx = Number(sizeInput?.value || 4);
   let brushColor = colorInput?.value || '#000000';
 
@@ -131,15 +133,38 @@
     isDrawing = true;
     const { x, y } = getPos(e);
     lastX = x; lastY = y;
+    points = [{ x, y }];
   }
 
   function draw(e) {
     if (!isDrawing) return;
     const { x, y } = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    const lx = lastX, ly = lastY;
+    const dx = x - lx, dy = y - ly;
+    if (dx * dx + dy * dy < DIST_THRESH_SQ) return; // 変化が小さすぎるときは無視
+
+    points.push({ x, y });
+
+    const n = points.length;
+    if (n === 2) {
+      // 開始直後は直線でつなぐ
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      ctx.lineTo(points[1].x, points[1].y);
+      ctx.stroke();
+    } else if (n >= 3) {
+      // 中点ベジェ法: m1=(p0,p1の中点), m2=(p1,p2の中点) を p1 を制御点とする二次曲線で結ぶ
+      const p0 = points[n - 3];
+      const p1 = points[n - 2];
+      const p2 = points[n - 1];
+      const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      ctx.beginPath();
+      ctx.moveTo(m1.x, m1.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+      ctx.stroke();
+    }
+
     lastX = x;
     lastY = y;
     // 描画中は間引いて送信
@@ -147,7 +172,30 @@
   }
 
   function endDraw() {
+    if (!isDrawing) return;
     isDrawing = false;
+
+    // 末端の処理（タップや短い線への対応）
+    const n = points.length;
+    if (n === 1) {
+      // 点を描く（塗りつぶしの円）
+      ctx.beginPath();
+      ctx.fillStyle = brushColor;
+      ctx.arc(points[0].x, points[0].y, (brushSizeCssPx * DPR) / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (n >= 3) {
+      // 最後の中点から最終点までを結ぶ
+      const p0 = points[n - 3];
+      const p1 = points[n - 2];
+      const p2 = points[n - 1];
+      const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      ctx.beginPath();
+      ctx.moveTo(mPrev.x, mPrev.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+      ctx.stroke();
+    }
+    points = [];
+
     // 最終フレーム送信
     sendFrame(true);
   }
