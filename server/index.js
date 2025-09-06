@@ -16,11 +16,11 @@ app.use(express.json({ limit: '20mb' }));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-// channel => { lastFrame: string | null, clients: Set<{ws, role}>, sse: Set<res> }
+// channel => { lastFrame: string | null, clients: Set<{ws, role}>, sse: Set<res>, config: object }
 const channels = new Map();
 
 function getChannel(name) {
-  if (!channels.has(name)) channels.set(name, { lastFrame: null, clients: new Set(), sse: new Set() });
+  if (!channels.has(name)) channels.set(name, { lastFrame: null, clients: new Set(), sse: new Set(), config: {} });
   return channels.get(name);
 }
 
@@ -55,6 +55,10 @@ wss.on('connection', (ws, req) => {
   if (role === 'receiver' && ch.lastFrame) {
     try { ws.send(JSON.stringify({ type: 'frame', data: ch.lastFrame })); } catch (_) {}
   }
+  // Send latest config to any client
+  if (ch.config && Object.keys(ch.config).length) {
+    try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch (_) {}
+  }
 
   ws.on('message', (raw) => {
     let msg = null;
@@ -86,6 +90,15 @@ wss.on('connection', (ws, req) => {
       broadcast(ch, relay, (c) => c.role === 'receiver');
       broadcastSSE(ch, { type: 'clear' });
       ch.lastFrame = null; // new receivers start blank
+      return;
+    }
+
+    if (msg.type === 'config' && msg.data && typeof msg.data === 'object') {
+      // Merge into channel config and broadcast
+      ch.config = { ...(ch.config || {}), ...msg.data };
+      const payload = JSON.stringify({ type: 'config', data: msg.data });
+      broadcast(ch, payload, () => true);
+      broadcastSSE(ch, { type: 'config', data: msg.data });
       return;
     }
   });
@@ -166,6 +179,24 @@ app.post('/clear', (req, res) => {
   broadcast(ch, txt, (c) => c.role === 'receiver');
   broadcastSSE(ch, msg);
   ch.lastFrame = null;
+  res.json({ ok: true });
+});
+
+// Config endpoints
+app.get('/config', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  res.json(ch.config || {});
+});
+app.post('/config', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  const data = req.body?.data;
+  if (!data || typeof data !== 'object') return res.status(400).json({ error: 'invalid' });
+  ch.config = { ...(ch.config || {}), ...data };
+  const payload = JSON.stringify({ type: 'config', data });
+  broadcast(ch, payload, () => true);
+  broadcastSSE(ch, { type: 'config', data });
   res.json({ ok: true });
 });
 

@@ -24,6 +24,11 @@ export class Transport {
     this.ws.onopen = () => { this.wsReady = true; this.httpFallback = false; };
     this.ws.onclose = () => { this.wsReady = false; setTimeout(() => this.connect(), 1000); };
     this.ws.onerror = () => { this.wsReady = false; this.httpFallback = !!this.serverUrl; };
+    this.ws.onmessage = (ev) => {
+      if (!this.onmessage) return;
+      let msg = null; try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null'); } catch(_) {}
+      if (msg) this.onmessage(msg);
+    };
   }
 
   wsSend(obj) {
@@ -61,4 +66,3 @@ export class Transport {
     if (this.httpFallback) this.httpPost('/clear', {});
   }
 }
-

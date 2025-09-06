@@ -55,6 +55,21 @@
 
     <!-- 送信側の接続先設定（編集可） -->
     <script src="sender-config.js"></script>
-    <script type="module" src="src/sender/index.js"></script>
+    <!-- file:// で開いた場合は ESModules がCORSにより読めないため、旧 main.js を動的ロード -->
+    <script>
+      (function(){
+        var isFile = location.protocol === 'file:';
+        if (isFile) {
+          var s = document.createElement('script');
+          s.src = 'main.js';
+          document.head.appendChild(s);
+        } else {
+          var m = document.createElement('script');
+          m.type = 'module';
+          m.src = 'src/sender/index.js';
+          document.head.appendChild(m);
+        }
+      })();
+    </script>
   </body>
   </html>

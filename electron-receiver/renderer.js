@@ -58,6 +58,8 @@
   let lastDrawnVersion = -1;
   let rafRunning = false;
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
+  let bgMode = 'white';
+  let bgImage = null; // ImageBitmap or HTMLImageElement
 
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
@@ -112,6 +114,7 @@
         strokes.clear();
         return;
       }
+      if (msg.type === 'config' && msg.data) { applyConfig(msg.data); return; }
       if (msg.type === 'stroke') {
         handleStroke(msg);
         return;
@@ -160,6 +163,7 @@
       try { handleStroke(JSON.parse(ev.data)); } catch (_) {}
     });
     es.addEventListener('clear', () => { clearCanvas(); strokes.clear(); });
+    es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) applyConfig(j.data); } catch (_) {} });
     es.onerror = () => { /* will auto-retry; keep http polling too */ };
   }
 
@@ -175,13 +179,37 @@
     if (!base || !ink) return;
     base.save();
     base.setTransform(1, 0, 0, 1, 0, 0);
-    base.fillStyle = '#ffffff';
-    base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+    if (bgMode === 'image' && bgImage) {
+      const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
+      base.drawImage(bgImage, 0, 0, sw, sh, 0, 0, baseCanvas.width, baseCanvas.height);
+    } else {
+      base.fillStyle = '#ffffff';
+      base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
+    }
     base.restore();
     ink.save();
     ink.setTransform(1, 0, 0, 1, 0, 0);
     ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
     ink.restore();
+  }
+
+  function applyConfig(data) {
+    if (data.bgReceiver) {
+      if (typeof data.bgReceiver === 'string') { bgMode = data.bgReceiver; bgImage = null; clearCanvas(); }
+      else if (data.bgReceiver.mode === 'image' && data.bgReceiver.url) {
+        const url = data.bgReceiver.url;
+        (async () => {
+          try {
+            if (typeof createImageBitmap === 'function') {
+              const bmp = await createImageBitmap(await (await fetch(url)).blob());
+              bgImage = bmp; bgMode = 'image'; clearCanvas();
+            } else {
+              const img = new Image(); img.onload = () => { bgImage = img; bgMode = 'image'; clearCanvas(); }; img.src = url;
+            }
+          } catch(_) { bgMode = 'white'; bgImage = null; clearCanvas(); }
+        })();
+      }
+    }
   }
 
   function handleStroke(msg) {
@@ -359,11 +387,14 @@
     rafRunning = true;
     const loop = () => {
       if (frameVersion !== lastDrawnVersion && currentBitmap) {
-        // Draw latest bitmap scaled to base layer (do not touch ink layer)
+        // Draw background then latest bitmap to base layer
         base.save();
         base.setTransform(1, 0, 0, 1, 0, 0);
-        const srcW = currentBitmap.width || currentBitmap.naturalWidth;
-        const srcH = currentBitmap.height || currentBitmap.naturalHeight;
+        if (bgMode === 'image' && bgImage) {
+          const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
+          base.drawImage(bgImage, 0, 0, sw, sh, 0, 0, baseCanvas.width, baseCanvas.height);
+        } else { base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height); }
+        const srcW = currentBitmap.width || currentBitmap.naturalWidth; const srcH = currentBitmap.height || currentBitmap.naturalHeight;
         base.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, baseCanvas.width, baseCanvas.height);
         base.restore();
         // Clear ink to prevent double-darkening when a fresh frame arrives

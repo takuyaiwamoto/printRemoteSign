@@ -16,6 +16,14 @@ window.addEventListener('resize', () => cm.fitToViewport(true));
 
 const transport = new Transport(SERVER_URL, CHANNEL, { sendIntervalMs: 150 });
 transport.connect();
+transport.onmessage = (msg) => {
+  if (msg.type === 'config' && msg.data) {
+    if (msg.data.bgSender) {
+      if (typeof msg.data.bgSender === 'string') { cm.setBackgroundWhite(); }
+      else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) { cm.setBackgroundImage(msg.data.bgSender.url); }
+    }
+  }
+};
 
 let realtimeEverUsed = false;
 cm.onStrokeStart = ({ id, nx, ny, color, size }) => {
@@ -46,4 +54,3 @@ cm.onStrokeEnd = ({ id }) => {
 };
 
 wireUI({ canvasManager: cm, transport });
-

@@ -22,6 +22,9 @@ export class CanvasManager {
     this.onStrokeEnd = () => {};
 
     this._bindInputs();
+    // background
+    this.bgMode = 'white';
+    this.bgImage = null;
   }
 
   setBrushSize(px) { this.brushSizeCss = Number(px) || this.brushSizeCss; this._applyBrush(); }
@@ -59,16 +62,40 @@ export class CanvasManager {
     this.canvas.height = Math.floor(height * this.DPR);
     this._applyBrush();
     const ctx = this.ctx;
-    if (prev) ctx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, this.canvas.width, this.canvas.height);
-    else { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height); }
+    if (prev) {
+      // Rebuild: background then previous content
+      const off = document.createElement('canvas'); off.width = this.canvas.width; off.height = this.canvas.height;
+      const octx = off.getContext('2d');
+      this._drawBackground(octx);
+      octx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, this.canvas.width, this.canvas.height);
+      ctx.drawImage(off, 0, 0);
+    } else { this._drawBackground(ctx); }
   }
 
   clear() {
     const ctx = this.ctx;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this._drawBackground(ctx);
     ctx.restore();
+  }
+
+  _drawBackground(ctx) {
+    if (this.bgMode === 'image' && this.bgImage) {
+      const sw = this.bgImage.width || this.bgImage.naturalWidth; const sh = this.bgImage.height || this.bgImage.naturalHeight;
+      ctx.drawImage(this.bgImage, 0, 0, sw, sh, 0, 0, this.canvas.width, this.canvas.height);
+    } else {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
+
+  async setBackgroundWhite() { this.bgMode = 'white'; this.bgImage = null; this.clear(); }
+  async setBackgroundImage(url) {
+    try {
+      if (typeof createImageBitmap === 'function') {
+        const bmp = await createImageBitmap(await (await fetch(url)).blob()); this.bgImage = bmp; this.bgMode = 'image';
+      } else { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }); this.bgImage = img; this.bgMode = 'image'; }
+    } catch(_) { this.bgMode = 'white'; this.bgImage = null; }
+    this.clear();
   }
 
   _pos(e) {
@@ -142,4 +169,3 @@ export class CanvasManager {
     }
   }
 }
-

@@ -35,11 +35,11 @@ body {
 
 .stage {
   display: grid;
-  grid-template-columns: auto auto; /* キャンバス + 右ツール */
+  grid-template-columns: 1fr auto; /* キャンバスを広く、右ツールを固定 */
   align-items: start;
-  justify-content: center; /* 2カラム全体を中央寄せ */
-  justify-items: stretch;
-  gap: 12px 8px; /* 横の隙間を狭く */
+  justify-content: center;
+  justify-items: center;
+  gap: 12px 8px;
   padding: 16px;
 }
 
