@@ -312,9 +312,62 @@
       clearCanvas();
     },
     onConfig: (d) => applyConfig(d),
+    // Animation trigger from senders
+    onAction: (type) => { if (type === 'sendAnimation') tryStartSendAnimation(); },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
     log: (...a) => log(...a)
   });
   net?.start?.();
+
+  // ---- Send animation handling ----
+  let animRunning = false;
+  function tryStartSendAnimation(){
+    if (animRunning) return; animRunning = true;
+    const delays = window.ReceiverConfig?.getAnimDelays?.() || { rotateDelaySec:0, moveDelaySec:0 };
+    const rotateDelay = Math.max(0, Math.min(10, Number(delays.rotateDelaySec)||0)) * 1000;
+    const moveDelay = Math.max(0, Math.min(10, Number(delays.moveDelaySec)||0)) * 1000;
+    const rotateDur = 1000; // 1s
+    const moveDur = 1500;   // 1.5s
+
+    // Step 1: after X sec, animate rotation to 180deg
+    setTimeout(() => {
+      rotationDeg = 180; applyBoxTransform();
+      // Step 2: after rotation done + Z sec, move down out of view
+      setTimeout(() => {
+        const box = canvasBox;
+        if (!box) { finish(); return; }
+        // animate translateY to push canvas below the window height
+        const start = performance.now();
+        const from = 0; const to = (window.innerHeight || 2000);
+        function moveTick(t){
+          const e = Math.min(1, (t-start)/moveDur);
+          const y = from + (to-from)*e;
+          box.style.transform = `translateY(${y}px)`;
+          if (e < 1) requestAnimationFrame(moveTick); else afterMove();
+        }
+        requestAnimationFrame(moveTick);
+      }, rotateDur + moveDelay);
+    }, rotateDelay);
+
+    function afterMove(){
+      // After 5s, clear drawings (receiver + senders) and reappear at top 80px with rotation 180
+      setTimeout(() => {
+        // request global clear
+        try { net?.stop?.(); } catch(_) {}
+        try {
+          // Trigger clear via ReceiverNet HTTP (best-effort); send WS via fetch fallback is not available here.
+          fetch(`${(window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER).replace(/^wss?:\/\//,'https://').replace(/\/$/,'')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
+        } catch(_) {}
+        window.StrokeEngine?.clearAll?.(); clearCanvas();
+        // reset transforms
+        if (canvasBox) canvasBox.style.transform = '';
+        rotationDeg = 180; applyBoxTransform();
+        animRunning = false;
+        // reconnect if we stopped it
+        try { location.reload(); } catch(_) {}
+      }, 5000);
+    }
+    function finish(){ animRunning = false; }
+  }
 })();

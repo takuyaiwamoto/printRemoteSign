@@ -49,6 +49,14 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
 
+  function sendAnimDelays(x, z){
+    const data = { animReceiver: { rotateDelaySec: Number(x)||0, moveDelaySec: Number(z)||0 } };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+
   // 画像URLの正規化
   function normalizeLocalUrl(u){
     if (!u) return u;
@@ -85,4 +93,14 @@
     scaleVal.textContent = scaleEl.value;
     clearTimeout(timer); timer = setTimeout(() => sendScaleReceiver(scaleEl.value), 100);
   });
+
+  // Animation delay sliders
+  const animX = document.getElementById('animDelayRotate');
+  const animXV = document.getElementById('animDelayRotateVal');
+  const animZ = document.getElementById('animDelayMove');
+  const animZV = document.getElementById('animDelayMoveVal');
+  let atimer = null;
+  function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
+  animX?.addEventListener('input', ()=>{ animXV.textContent = animX.value; pushAnim(); });
+  animZ?.addEventListener('input', ()=>{ animZV.textContent = animZ.value; pushAnim(); });
 })();

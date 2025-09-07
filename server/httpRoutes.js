@@ -80,6 +80,17 @@ function registerHttpRoutes(app) {
     res.json({ ok: true });
   });
 
+  // HTTP fallback for sendAnimation trigger
+  app.post('/anim', (req, res) => {
+    const channelName = req.query.channel || 'default';
+    const ch = getChannel(channelName);
+    const msg = { type: 'sendAnimation' };
+    const txt = JSON.stringify(msg);
+    broadcast(ch, txt, () => true);
+    broadcastSSE(ch, msg);
+    res.json({ ok: true });
+  });
+
   app.get('/config', (req, res) => {
     const channelName = req.query.channel || 'default';
     const ch = getChannel(channelName);
@@ -112,4 +123,3 @@ function registerHttpRoutes(app) {
 }
 
 export { registerHttpRoutes };
-

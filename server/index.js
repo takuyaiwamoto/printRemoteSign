@@ -55,6 +55,13 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if (msg.type === 'sendAnimation') {
+      const relay = JSON.stringify({ type: 'sendAnimation' });
+      broadcast(ch, relay, () => true);
+      broadcastSSE(ch, { type: 'sendAnimation' });
+      return;
+    }
+
     // Realtime stroke relay (WebSocket only). Small JSON messages.
     if (msg.type === 'stroke') {
       // Basic validation

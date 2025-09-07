@@ -5,6 +5,8 @@
   let onScale = null;
   let onRotate = null;
   let log = () => {};
+  let animRotateDelaySec = 0;
+  let animMoveDelaySec = 0;
 
   function init({ base, onScaleCb, onRotateCb, logCb }) {
     baseCanvas = base;
@@ -69,8 +71,15 @@
     }
     if (typeof data.scaleReceiver === 'number') { const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100))); onScale && onScale(v); }
     if (typeof data.rotateReceiver !== 'undefined') { const val = Number(data.rotateReceiver); onRotate && onRotate(val === 180 ? 180 : 0); }
+    if (data.animReceiver && typeof data.animReceiver === 'object') {
+      const x = Number(data.animReceiver.rotateDelaySec); const z = Number(data.animReceiver.moveDelaySec);
+      if (isFinite(x)) animRotateDelaySec = Math.max(0, Math.min(10, Math.round(x)));
+      if (isFinite(z)) animMoveDelaySec = Math.max(0, Math.min(10, Math.round(z)));
+      log('anim config', { animRotateDelaySec, animMoveDelaySec });
+    }
   }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig };
-})();
+  function getAnimDelays() { return { rotateDelaySec: animRotateDelaySec, moveDelaySec: animMoveDelaySec }; }
 
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays };
+})();

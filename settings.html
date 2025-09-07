@@ -27,6 +27,21 @@
           <div class="muted">現在: <span id="scaleVal">50</span>%</div>
         </label>
       </div>
+      <div class="row">
+        <div class="panel">
+          <div class="head">送るアニメーション（遅延）</div>
+          <div style="display:grid; gap:8px;">
+            <label>回転までの遅延X（秒 0-10）
+              <input id="animDelayRotate" type="range" min="0" max="10" value="0" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="animDelayRotateVal">0</span>s</span>
+            </label>
+            <label>移動までの遅延Z（秒 0-10）
+              <input id="animDelayMove" type="range" min="0" max="10" value="0" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="animDelayMoveVal">0</span>s</span>
+            </label>
+          </div>
+        </div>
+      </div>
       <div><strong>背景設定</strong> <span class="muted">（クリックで送信／即時反映）</span></div>
       <div class="row">
         <div class="panel" id="senderPanel">

@@ -3,6 +3,7 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearAllBtn = document.getElementById('btn-clear-all');
+  const sendBtn = document.getElementById('btn-send');
   const clearMineBtn = document.getElementById('btn-clear-mine');
   const sizeInput = document.getElementById('size');
   const colorInput = document.getElementById('color');
@@ -65,6 +66,19 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
     if (transport) transport.wsSend ? transport.wsSend({ type:'clearMine', authorId }) : transport.sendClear?.();
     // HTTP fallback
     try { transport.httpPost?.('/config', { noop: true }); } catch(_) {}
+  });
+
+  // Send animation trigger to receivers (uses current channel config for delays)
+  sendBtn?.addEventListener('click', () => {
+    // ignore rapid re-clicks; simple disabled toggle
+    if (sendBtn.disabled) return;
+    sendBtn.disabled = true;
+    const enableLater = () => { sendBtn.disabled = false; };
+    setTimeout(enableLater, 8000); // animation window; receivers also gate
+    try {
+      if (transport?.wsSend && transport.wsReady) transport.wsSend({ type: 'sendAnimation' });
+      else transport?.httpPost?.('/anim', {});
+    } catch(_) {}
   });
 
   // Hook resize to external listener to resize layers for others

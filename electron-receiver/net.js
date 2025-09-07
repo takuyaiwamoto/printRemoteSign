@@ -6,7 +6,7 @@
     return u.replace(/^http/, 'ws').replace(/\/$/, '');
   }
 
-  function create({ server, channel, onFrame, onStroke, onClear, onConfig, setStatus, setInfo, log }) {
+  function create({ server, channel, onFrame, onStroke, onClear, onConfig, onAction, setStatus, setInfo, log }) {
     let SERVER = (server || '').trim();
     let CHANNEL = (channel || 'default').trim();
     let ws = null;
@@ -40,6 +40,7 @@
       es.addEventListener('frame', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onFrame && onFrame(j.data); } catch(_) {} });
       es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); onStroke && onStroke(m); } catch(_) {} });
       es.addEventListener('clear', () => { onClear && onClear(); });
+      es.addEventListener('sendAnimation', () => { onAction && onAction('sendAnimation'); });
       es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onConfig && onConfig(j.data); } catch(_) {} });
       es.onerror = () => { /* auto retry; keep polling too */ };
     }
@@ -85,6 +86,7 @@
         if (msg.type === 'hello') { setInfo && setInfo('接続済み'); return; }
         if (msg.type === 'frame' && typeof msg.data === 'string') { onFrame && onFrame(msg.data); return; }
         if (msg.type === 'clear') { onClear && onClear(); return; }
+        if (msg.type === 'sendAnimation') { onAction && onAction('sendAnimation'); return; }
         if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
         if (msg.type === 'config' && msg.data) { onConfig && onConfig(msg.data); return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
