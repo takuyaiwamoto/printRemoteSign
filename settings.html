@@ -56,6 +56,22 @@
           </div>
         </div>
       </div>
+      <div class="row">
+        <div class="panel" id="rotatePanel">
+          <div class="head">受信キャンバスの回転</div>
+          <div class="choices">
+            <div class="card" data-target="rotate" data-rot="0">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='280'%3E%3Crect width='100%25' height='100%25' fill='white'/%3E%3C/svg%3E" alt="0度"/>
+              <div class="label">0度</div>
+            </div>
+            <div class="card" data-target="rotate" data-rot="180">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='280'%3E%3Crect width='100%25' height='100%25' fill='white'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='24' fill='black'%3E180°%3C/text%3E%3C/svg%3E" alt="180度"/>
+              <div class="label">180度</div>
+            </div>
+          </div>
+          <div class="notice">既定は180度（受信側のみ反映）</div>
+        </div>
+      </div>
       <div class="notice">注: back2.png はプロジェクト直下に配置してください。GitHub Pagesでは相対URLで配信されます。</div>
     </div>
 
@@ -104,6 +120,15 @@
         document.querySelectorAll('.card').forEach(card => {
           card.addEventListener('click', () => {
             const target = card.getAttribute('data-target');
+            if (target === 'rotate') {
+              const rot = Number(card.getAttribute('data-rot') || '0');
+              const data = { rotateReceiver: (rot === 180) ? 180 : 0 };
+              const msg = { type: 'config', data };
+              if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+              fetch(`${SERVER_URL.replace(/^wss?:\/\//i, (m)=>m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`,
+                { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+              return;
+            }
             const mode = card.getAttribute('data-mode');
             const url = card.getAttribute('data-url');
             sendConfig(target, mode, url);

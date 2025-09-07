@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.6';
+  const RECEIVER_VERSION = '0.6.7';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -66,6 +66,13 @@
   let bgMode = 'white';
   let bgImage = null; // ImageBitmap or HTMLImageElement
   const canvasBox = document.getElementById('canvasBox');
+  // Receiver-only transforms
+  let rotationDeg = 180; // default: 180 per requirement
+  let scalePct = 100;
+  function applyBoxTransform() {
+    const factor = Math.max(0.01, (scalePct || 100) / 100);
+    if (canvasBox) canvasBox.style.transform = `rotate(${rotationDeg}deg) scale(${factor})`;
+  }
 
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { author, color, sizeCss, sizeDev, points: [{x,y,time}], drawnUntil: number, ended: boolean }
@@ -279,9 +286,15 @@
     }
     if (typeof data.scaleReceiver === 'number') {
       const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100)));
-      const factor = v / 100;
-      if (canvasBox) canvasBox.style.transform = `scale(${factor})`;
-      log('scaleReceiver applied', { v, factor });
+      scalePct = v;
+      applyBoxTransform();
+      log('scaleReceiver applied', { v, factor: v/100 });
+    }
+    if (typeof data.rotateReceiver !== 'undefined') {
+      const val = Number(data.rotateReceiver);
+      rotationDeg = (val === 180) ? 180 : 0;
+      applyBoxTransform();
+      log('rotateReceiver applied', { rotationDeg });
     }
   }
 
@@ -491,8 +504,9 @@
     requestAnimationFrame(loop);
   }
 
-  // Clear once at start and spin RAF even if no frames arrive (for stroke streaming)
+  // Clear once at start, apply initial transform, and spin RAF even if no frames arrive
   clearCanvas();
+  applyBoxTransform();
   ensureRAF();
   connect();
 })();
