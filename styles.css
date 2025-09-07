@@ -98,6 +98,7 @@ canvas {
 }
 .size-btn:hover, .color-btn:hover { background: #f3f4f6; }
 .action-btn:hover { background: #fef2f2; }
+.action-btn.is-active { outline: 2px solid #60a5fa; outline-offset: 2px; }
 .size-btn.active, .color-btn.active { outline: 2px solid #60a5fa; outline-offset: 2px; }
 .size-btn .stroke {
   width: 26px; height: 26px;

@@ -1,7 +1,6 @@
 (() => {
   const SENDER_VERSION = '0.7.3';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
-  try { const b = document.getElementById('author-badge'); if (b) b.textContent = `ID:${AUTHOR_ID}`; } catch(_) {}
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
   const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
@@ -16,7 +15,7 @@
   const clearBtn = document.getElementById('clear');
   const saveBtn = document.getElementById('save');
   const clearAllBtn = document.getElementById('btn-clear-all');
-  const clearMineBtn = document.getElementById('btn-clear-mine');
+  const eraserBtn = document.getElementById('btn-eraser');
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearSideBtn = document.getElementById('btn-clear');
@@ -42,6 +41,8 @@
   let currentStrokeId = null;
   let realtimeEverUsed = false; // 一度でも座標ストリームを使ったらフレーム送信を抑制
   const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
+  try { const b = document.getElementById('author-badge'); if (b) b.textContent = `ID:${AUTHOR_ID}`; } catch(_) {}
+  let eraserActive = false;
 
   // 他者描画レイヤとスムージング
   const otherLayers = new Map(); // authorId -> {canvas, ctx}
@@ -80,6 +81,7 @@
         else continue;
       }
       const layer = getOtherLayer(s.author).ctx;
+      layer.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
       layer.lineJoin='round'; layer.lineCap='round'; layer.strokeStyle=s.color; layer.lineWidth=s.sizeDev || (s.sizeCss*DPR);
       let drew=false; layer.beginPath(); layer.moveTo(s.lastPt.x, s.lastPt.y);
       const q=(m1,p1,m2,t)=>{const a=1-t; return {x:a*a*m1.x+2*a*t*p1.x+t*t*m2.x,y:a*a*m1.y+2*a*t*p1.y+t*t*m2.y}};
@@ -289,10 +291,10 @@
       const cssW = canvas.width / DPR;
       const sizeN = brushSizeCssPx / cssW; // キャンバス幅に対する相対太さ
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID, tool: (eraserActive?'eraser':'pen') })); } catch (_) {}
         slog('send start', { id, author: AUTHOR_ID, nx, ny, size: brushSizeCssPx, sizeN });
       } else {
-        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID });
+        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') });
         slog('queue start(HTTP)', { id, author: AUTHOR_ID });
       }
       realtimeEverUsed = true;
@@ -309,6 +311,8 @@
     points.push({ x, y });
 
     const n = points.length;
+    // set composite mode for eraser
+    if (eraserActive) ctx.globalCompositeOperation = 'destination-out';
     if (n === 2) {
       // 開始直後は直線でつなぐ
       ctx.beginPath();
@@ -332,15 +336,16 @@
     lastY = y;
     // 描画中のフレーム送信は既定で無効（座標ストリームを優先）
     if (SEND_FRAMES_DURING_DRAW) maybeSendFrame();
+    if (eraserActive) { composeOthers(); }
 
     // Realtime stroke point
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       const nx = x / canvas.width, ny = y / canvas.height;
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') })); } catch (_) {}
         if (SDEBUG && (points.length % 10 === 0)) slog('send point', { id: currentStrokeId, nx, ny });
       } else {
-        queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID });
+        queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') });
       }
     }
   }
@@ -370,17 +375,19 @@
     }
     points = [];
 
+    // reset composite after erasing
+    if (eraserActive) ctx.globalCompositeOperation = 'source-over';
     // リアルタイム座標が使えている場合はフレーム送信しない（太さやエッジの差異を避ける）
     if (!realtimeEverUsed) sendFrame(true);
 
     // Realtime stroke end
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') })); } catch (_) {}
         slog('send end', { id: currentStrokeId });
       } else {
         postStrokeBatchFlush();
-        postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID });
+        postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') });
         slog('queue end(HTTP)', { id: currentStrokeId });
       }
       currentStrokeId = null;
@@ -471,11 +478,9 @@
     }
   })());
 
-  clearMineBtn?.addEventListener('click', () => {
-    // 自分キャンバスの消去 + 自分レイヤの削除通知
-    ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
-    if (wsReady) { try { ws.send(JSON.stringify({ type:'clearMine', authorId: AUTHOR_ID })); } catch(_) {} }
-    else if (httpFallback && SERVER_URL) { httpPost('/config', { noop:true }); }
+  eraserBtn?.addEventListener('click', () => {
+    eraserActive = !eraserActive;
+    eraserBtn.classList.toggle('is-active', eraserActive);
   });
 
   // ---- HTTP stroke batching helpers ----

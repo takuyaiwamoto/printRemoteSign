@@ -291,7 +291,7 @@
       const now = performance.now();
       const p = { x: pxy.x, y: pxy.y, time: now };
       const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * baseCanvas.width) : (Number(msg.size || 4) * DPR);
-      const s = { author: String(msg.authorId || 'anon'), color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], drawnUntil: 0, ended: false };
+      const s = { author: String(msg.authorId || 'anon'), tool: (msg.tool||'pen'), color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], drawnUntil: 0, ended: false };
       strokes.set(id, s);
       // 即時に開始点を指定太さで可視化（細く見える問題を避ける）
       const lay = getAuthorLayer(s.author).ctx;
@@ -354,6 +354,7 @@
       }
 
       const ctxL = getAuthorLayer(String(s.author || 'anon')).ctx;
+      ctxL.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
       ctxL.lineJoin = 'round';
       ctxL.lineCap = 'round';
       ctxL.strokeStyle = s.color;
@@ -361,6 +362,7 @@
 
       let drew = false;
       const ctx = getAuthorLayer(String(s.author || 'anon')).ctx;
+      ctx.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
       ctx.beginPath();
       ctx.moveTo(s.lastPt.x, s.lastPt.y);
 
