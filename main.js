@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.8.6';
+  const SENDER_VERSION = '0.8.7';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -531,14 +531,15 @@
     }
   });
   clearAllBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
-    // 押した人の描画だけ消す
+    // グローバル全消し（全員のキャンバス）
     selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+    for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
     composeOthers();
     if (wsReady) {
-      try { ws.send(JSON.stringify({ type: 'clearMine', authorId: AUTHOR_ID })); } catch (_) {}
+      try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
       const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-      fetch(`${httpBase.replace(/\/$/, '')}/clearMine?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ authorId: AUTHOR_ID }) }).catch(() => {});
+      fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   })());
 

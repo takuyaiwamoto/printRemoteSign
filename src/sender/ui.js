@@ -53,10 +53,9 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
   });
 
   function performClear() {
-    // 要件: 押した人の描画だけ全端末でクリア
+    // 押した人に限らず全員のキャンバスをクリア（グローバル全消し）
     canvasManager.clear();
-    if (transport?.sendClearMine) transport.sendClearMine(authorId);
-    else if (transport?.wsSend) transport.wsSend({ type: 'clearMine', authorId });
+    transport?.sendClear?.();
   }
   clearAllBtn?.addEventListener('click', performClear);
   clearMineBtn?.addEventListener('click', () => {
