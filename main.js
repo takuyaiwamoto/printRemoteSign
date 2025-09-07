@@ -111,7 +111,7 @@
       }
       const layer = getOtherLayer(s.author).ctx;
       layer.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
-      layer.lineJoin='round'; layer.lineCap='round'; layer.strokeStyle=s.color; layer.lineWidth=s.sizeDev || (s.sizeCss*DPR);
+      layer.lineJoin='round'; layer.lineCap='round'; layer.strokeStyle=s.color; layer.lineWidth=(s.tool==='eraser'?1.3:1.0) * (s.sizeDev || (s.sizeCss*DPR));
       let drew=false; layer.beginPath(); layer.moveTo(s.lastPt.x, s.lastPt.y);
       const q=(m1,p1,m2,t)=>{const a=1-t; return {x:a*a*m1.x+2*a*t*p1.x+t*t*m2.x,y:a*a*m1.y+2*a*t*p1.y+t*t*m2.y}};
       while (s.curIndex<=ready) {
@@ -200,7 +200,7 @@
             const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
             const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
             otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), tool:(msg.tool||'pen'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
-            const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
+            const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.globalCompositeOperation = (msg.tool==='eraser')?'destination-out':'source-over'; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y, (msg.tool==='eraser'?1.3:1.0)*sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
             slog('other start', { id: msg.id, author: msg.authorId });
           } else if (msg.phase === 'point') {
             const s = otherStrokes.get(msg.id); if (!s) return; const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() }; s.points.push(p);
@@ -340,7 +340,7 @@
     const tctx = selfLayer.ctx;
     tctx.globalCompositeOperation = eraserActive ? 'destination-out' : 'source-over';
     tctx.lineJoin = 'round'; tctx.lineCap = 'round';
-    tctx.strokeStyle = brushColor; tctx.lineWidth = brushSizeCssPx * DPR;
+    tctx.strokeStyle = brushColor; tctx.lineWidth = (eraserActive ? 1.3 : 1.0) * brushSizeCssPx * DPR;
     if (n === 2) {
       tctx.beginPath();
       tctx.moveTo(points[0].x, points[0].y);
@@ -384,7 +384,7 @@
     const n = points.length;
     if (n === 1) {
       const tctx = selfLayer.ctx; tctx.beginPath(); tctx.fillStyle = brushColor; tctx.globalCompositeOperation = eraserActive?'destination-out':'source-over';
-      tctx.arc(points[0].x, points[0].y, (brushSizeCssPx * DPR) / 2, 0, Math.PI * 2); tctx.fill();
+      tctx.arc(points[0].x, points[0].y, ((eraserActive?1.3:1.0) * brushSizeCssPx * DPR) / 2, 0, Math.PI * 2); tctx.fill();
     } else if (n >= 3) {
       const p0 = points[n - 3]; const p1 = points[n - 2]; const p2 = points[n - 1];
       const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };

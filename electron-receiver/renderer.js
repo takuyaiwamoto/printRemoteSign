@@ -139,8 +139,12 @@
         return;
       }
       if (msg.type === 'clear') {
-        clearCanvas();
+        // 背景は維持し、全レイヤのみクリア
+        for (const { canvas, ctx } of authorLayers.values()) {
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
         strokes.clear();
+        clearCanvas();
         return;
       }
       if (msg.type === 'config' && msg.data) { applyConfig(msg.data); return; }
@@ -359,7 +363,7 @@
       ctxL.lineJoin = 'round';
       ctxL.lineCap = 'round';
       ctxL.strokeStyle = s.color;
-      ctxL.lineWidth = s.sizeDev || (s.sizeCss * DPR);
+      ctxL.lineWidth = (s.tool==='eraser'?1.3:1.0) * (s.sizeDev || (s.sizeCss * DPR));
 
       let drew = false;
       const ctx = getAuthorLayer(String(s.author || 'anon')).ctx;
