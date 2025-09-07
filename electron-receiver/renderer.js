@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.16';
+  const RECEIVER_VERSION = '0.6.23';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -324,12 +324,15 @@
   // ---- Send animation handling ----
   let animRunning = false;
   function tryStartSendAnimation(){
-    if (animRunning) return; animRunning = true;
+    if (animRunning) { try { console.log('[receiver] anim already running'); } catch(_) {}; return; }
+    animRunning = true; try { console.log('[receiver] anim start'); } catch(_) {}
     const delays = window.ReceiverConfig?.getAnimDelays?.() || { rotateDelaySec:0, moveDelaySec:0 };
     const rotateDelay = Math.max(0, Math.min(10, Number(delays.rotateDelaySec)||0)) * 1000;
     const moveDelay = Math.max(0, Math.min(10, Number(delays.moveDelaySec)||0)) * 1000;
     const rotateDur = 1000; // 1s
     const moveDur = 1500;   // 1.5s
+
+    // Confetti will start together with fireworks (at rotation start)
 
     // Step 1: after X sec, animate rotation to 180deg
     setTimeout(() => {
@@ -338,10 +341,14 @@
       const endDeg = (startDeg + 180) % 360;
       if (rotator) rotator.style.transition = `transform ${rotateDur}ms ease`;
       rotationDeg = endDeg; applyBoxTransform();
+      // Fireworks start together with rotation (confetti at move timing)
+      try { startFireworks(4000); } catch(_) {}
       // Step 2: after rotation done + Z sec, move down out of view
       setTimeout(() => {
         const box = canvasBox;
         if (!box) { finish(); return; }
+        // Emit confetti right when moving starts (shorter window)
+        try { startConfetti(700); } catch(_) {}
         // animate translateY to push canvas below the window height
         const start = performance.now();
         const from = 0; const to = (window.innerHeight || 2000);
@@ -373,5 +380,153 @@
       }, 5000);
     }
     function finish(){ animRunning = false; }
+  }
+
+  // ---- Fireworks overlay (window-wide, 2D canvas) ----
+  let fwRunning = false;
+  function startFireworks(durationMs = 4000) {
+    if (fwRunning) return; fwRunning = true;
+    const cv = document.createElement('canvas');
+    cv.style.position = 'fixed'; cv.style.inset = '0'; cv.style.zIndex = '9999';
+    cv.style.pointerEvents = 'none';
+    document.body.appendChild(cv);
+    const g = cv.getContext('2d');
+    function fit(){ cv.width = Math.floor((window.innerWidth||800) * DPR); cv.height = Math.floor((window.innerHeight||600) * DPR); cv.style.width='100%'; cv.style.height='100%'; g.scale(1,1); }
+    fit();
+    const onResize = () => { fit(); };
+    window.addEventListener('resize', onResize);
+
+    const rockets = []; // {x,y,vx,vy,color,exploded}
+    const parts = [];   // {x,y,vx,vy,life,color}
+    const colors = ['#ff6b6b','#ffd166','#06d6a0','#118ab2','#a78bfa','#f472b6'];
+    const GR = 0.10 * DPR;
+    const now = () => performance.now();
+    const t0 = now();
+    let lastSpawn = t0;
+    const spawnInterval = 550; // slower spawn pace (~0.55s)
+    function spawnRocket(){
+      const W = cv.width, H = cv.height;
+      const x = (Math.random()*0.8+0.1) * W; const y = H + 5*DPR;
+      const vx = (Math.random()-0.5) * 0.3 * DPR;
+      const vy = -(1.2 + Math.random()*0.6) * DPR * 8; // upward
+      rockets.push({ x, y, vx, vy, color: colors[(Math.random()*colors.length)|0], exploded:false });
+    }
+    function explode(r){
+      const count = 40 + (Math.random()*20|0);
+      for (let i=0;i<count;i++){
+        const a = (i/count) * Math.PI*2; const sp = 1.5 + Math.random()*1.5;
+        const vx = Math.cos(a)*sp*DPR*2, vy = Math.sin(a)*sp*DPR*2;
+        parts.push({ x:r.x, y:r.y, vx, vy, life: 600 + (Math.random()*500|0), color: r.color });
+      }
+    }
+    function step(){
+      const t = now();
+      const elapsed = t - t0;
+      // clear with fade trail
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.globalCompositeOperation = 'destination-out';
+      g.fillRect(0,0,cv.width,cv.height);
+      g.globalCompositeOperation = 'lighter';
+
+      // spawn rockets
+      // spawn rockets only during active window; slower pace
+      if (t - t0 < durationMs && t - lastSpawn > spawnInterval) { lastSpawn = t; spawnRocket(); }
+      // update rockets
+      for (let i=rockets.length-1;i>=0;i--){
+        const r = rockets[i];
+        r.x += r.vx; r.y += r.vy; r.vy += GR*0.4;
+        // explode when upward velocity reduces or near top
+        if (!r.exploded && (r.vy > -1 || r.y < cv.height*0.25)) { r.exploded = true; explode(r); rockets.splice(i,1); continue; }
+        // draw rocket
+        g.fillStyle = r.color; g.beginPath(); g.arc(r.x, r.y, 2*DPR, 0, Math.PI*2); g.fill();
+      }
+      // update particles
+      for (let i=parts.length-1;i>=0;i--){
+        const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vy += GR*0.2; p.life -= 16;
+        if (p.life <= 0) { parts.splice(i,1); continue; }
+        g.fillStyle = p.color; g.globalAlpha = Math.max(0, p.life/600);
+        g.beginPath(); g.arc(p.x, p.y, 2*DPR, 0, Math.PI*2); g.fill(); g.globalAlpha = 1;
+      }
+      // after durationMs, stop spawning but let remaining rockets/particles finish naturally
+      if (t - t0 >= durationMs && rockets.length === 0 && parts.length === 0) finishFW();
+      else requestAnimationFrame(step);
+    }
+    function finishFW(){
+      window.removeEventListener('resize', onResize);
+      try { cv.remove(); } catch(_) {}
+      fwRunning = false;
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ---- Confetti burst from bottom corners (pre-move) ----
+  let cfRunning = false;
+function startConfetti(spawnWindowMs = 700) {
+    if (cfRunning) return; cfRunning = true;
+    const cv = document.createElement('canvas');
+    cv.style.position = 'fixed'; cv.style.inset = '0'; cv.style.zIndex = '9999';
+    cv.style.pointerEvents = 'none';
+    document.body.appendChild(cv);
+    const g = cv.getContext('2d');
+    function fit(){ cv.width = Math.floor((window.innerWidth||800) * DPR); cv.height = Math.floor((window.innerHeight||600) * DPR); cv.style.width='100%'; cv.style.height='100%'; }
+    fit();
+    const onResize = () => fit(); window.addEventListener('resize', onResize);
+
+    const parts = []; // {x,y,vx,vy,life,w,h,ang,angV,color,gl,seed,shape}
+    const colors = ['#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#f59e0b','#22d3ee','#ffd700','#c0c0c0'];
+    const now = () => performance.now();
+    const t0 = now();
+    // クラッカー感: 少し強めの重力、発生間隔を遅め
+    const GR = 0.14 * DPR;
+    const spawnEvery = 100; // ms
+    let lastSpawn = t0;
+    function spawnSide(side){
+      const W=cv.width, H=cv.height; const y = H - 4*DPR; const x = side==='left' ? 6*DPR : W - 6*DPR;
+      const count = 6; // 量を半分に
+      for (let i=0;i<count;i++){
+        // 目標は中央より上（高さ15%付近）
+        const targetX = W*0.5 + (Math.random()-0.5)*0.14*W;
+        const targetY = H*0.15 + (Math.random()-0.5)*0.05*H;
+        const dx = targetX - x, dy = targetY - y;
+        const len = Math.max(1, Math.hypot(dx,dy));
+        const ux = dx/len, uy = dy/len; // unit vector toward target
+        const base = (1.8 + Math.random()*0.6) * DPR * 1.8; // 勢い控えめ
+        const jx = (Math.random()-0.5)*0.22, jy = (Math.random()-0.5)*0.08; // ジッタ小さめ
+        const vx = (ux + jx) * base; const vy = (uy + jy) * base; // uy negative (upward)
+        const isGlitter = Math.random() < 0.30; // 30% glitter（金/銀多め）
+        const shape = isGlitter ? 'star' : (Math.random()<0.5 ? 'tri' : 'rect');
+        parts.push({ x, y, vx, vy, life: 800 + (Math.random()*400|0), w: 6*DPR, h: 9*DPR, ang: Math.random()*Math.PI, angV:(Math.random()*2-1)*0.14, color: colors[(Math.random()*colors.length)|0], gl: isGlitter, seed: Math.random()*1000, shape });
+      }
+    }
+    function step(){
+      const t = now();
+      // spawn within window
+      if (t - t0 < spawnWindowMs && t - lastSpawn > spawnEvery) { lastSpawn = t; spawnSide('left'); spawnSide('right'); }
+      // clear faded trail
+      g.clearRect(0,0,cv.width,cv.height);
+      // draw
+      for (let i=parts.length-1;i>=0;i--){
+        const p = parts[i]; p.x += p.vx; p.y += p.vy; p.vy += GR; p.ang += p.angV; p.life -= 16;
+        if (p.life <= 0 || p.y > cv.height + 20*DPR) { parts.splice(i,1); continue; }
+        g.save(); g.translate(p.x, p.y); g.rotate(p.ang);
+        if (p.gl || p.shape==='star') {
+          const flick = 0.6 + 0.4*Math.abs(Math.sin((t + p.seed)/120));
+          g.globalAlpha = flick; g.fillStyle = (p.color === '#ffd700' || p.color === '#c0c0c0') ? p.color : '#ffd700';
+          g.rotate(0.785);
+          g.fillRect(-p.w/2, -p.h*0.08, p.w, p.h*0.16);
+          g.rotate(Math.PI/2);
+          g.fillRect(-p.w/2, -p.h*0.08, p.w, p.h*0.16);
+          g.globalAlpha = 1;
+        } else if (p.shape === 'tri') {
+          g.fillStyle = p.color; g.beginPath(); g.moveTo(0, -p.h/2); g.lineTo(p.w/2, p.h/2); g.lineTo(-p.w/2, p.h/2); g.closePath(); g.fill();
+        } else {
+          g.fillStyle = p.color; g.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        }
+        g.restore();
+      }
+      if (t - t0 >= spawnWindowMs && parts.length === 0) finishCF(); else requestAnimationFrame(step);
+    }
+    function finishCF(){ window.removeEventListener('resize', onResize); try { cv.remove(); } catch(_){} cfRunning = false; }
+    requestAnimationFrame(step);
   }
 })();
