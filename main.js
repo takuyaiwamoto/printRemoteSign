@@ -1,11 +1,12 @@
 (() => {
-  const SENDER_VERSION = '0.8.7';
+  const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
+  const SENDER_VERSION = SHARED_CONST?.VERSION || '0.8.8';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
-  const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
-  const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
-  const ERASER_SCALE = 1.3;            // 消しゴムは常に+30%
-  const OTHER_BUFFER_MS = 200;         // 他者描画のスムージング遅延
+  const RATIO = SHARED_CONST?.RATIO_A4 ?? (210 / 297); // A4 縦: 幅 / 高さ（約 0.707）
+  const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, SHARED_CONST?.DPR_MAX ?? 3));
+  const ERASER_SCALE = SHARED_CONST?.ERASER_SCALE ?? 1.3;            // 消しゴムは常に+30%
+  const OTHER_BUFFER_MS = SHARED_CONST?.OTHER_BUFFER_MS ?? 200;      // 他者描画のスムージング遅延
   const SEND_INTERVAL_MS = 150;        // PNG送信の間引き（通常OFF）
   const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
   const slog = (...a) => { if (SDEBUG) console.log('[sender]', ...a); };
@@ -122,15 +123,10 @@
       } catch(_) {}
     });
     es.addEventListener('clear', () => {
-      if (window.SenderShared?.clear?.clearAll) {
-        window.SenderShared.clear.clearAll({ ctx, canvas, otherLayers, selfLayer, otherStrokes, compose: composeOthers });
-      } else {
-        ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
-        for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
-        selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
-        otherStrokes.clear();
-        composeOthers();
-      }
+      // 受け手側: 背景は維持し、描画のみ消す
+      selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+      otherEngine?.clearAll?.();
+      composeOthers();
       if (SDEBUG) slog('sse clear all');
     });
   }
@@ -168,7 +164,7 @@
           } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; }
         }
         if (msg && msg.type === 'clear') {
-          ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+          // 背景は維持し、描画のみ消す
           selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
           otherEngine?.clearAll?.();
           composeOthers();
@@ -485,7 +481,7 @@
   clearAllBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
     // グローバル全消し（全員のキャンバス）
     selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
-    for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+    otherEngine?.clearAll?.();
     composeOthers();
     if (wsReady) {
       try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
