@@ -117,6 +117,14 @@
             { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
         }
 
+        // file:// の場合、相対パスで選んだ画像は ../ にフォールバックしてみる
+        function normalizeLocalUrl(u){
+          if (!u) return u;
+          if (/^https?:/i.test(u)) return u;
+          if (location.protocol === 'file:') return '../' + u.replace(/^\/+/, '');
+          return u;
+        }
+
         document.querySelectorAll('.card').forEach(card => {
           card.addEventListener('click', () => {
             const target = card.getAttribute('data-target');
@@ -130,7 +138,7 @@
               return;
             }
             const mode = card.getAttribute('data-mode');
-            const url = card.getAttribute('data-url');
+            const url = normalizeLocalUrl(card.getAttribute('data-url'));
             sendConfig(target, mode, url);
           });
         });

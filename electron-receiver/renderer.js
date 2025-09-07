@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.13';
+  const RECEIVER_VERSION = '0.6.14';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -125,14 +125,14 @@
     ws.binaryType = 'arraybuffer';
     setStatus('接続中…');
 
-    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); stopSSE(); };
+    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); stopSSE(); startConfigPolling(); };
     ws.onclose = () => {
       setStatus('切断、再接続待ち…');
       if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1000);
-      startHttpPolling();
+      startHttpPolling(); startConfigPolling();
       startSSE();
     };
-    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); startSSE(); };
+    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); startSSE(); startConfigPolling(); };
     ws.onmessage = async (ev) => {
       let msg;
       try {
@@ -214,6 +214,20 @@
   function stopSSE() {
     if (es) { try { es.close(); } catch (_) {}; es = null; }
   }
+
+  // Periodic config fetch as a safety net (in case WS config messages are missed)
+  let configPollTimer = null;
+  function startConfigPolling() {
+    if (configPollTimer) return;
+    const httpBase = toHttpBase(SERVER);
+    const url = `${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`;
+    const tick = async () => {
+      try { const r = await fetch(url, { cache:'no-store' }); if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') applyConfig(j); } } catch (_) {}
+    };
+    configPollTimer = setInterval(tick, 2000);
+    tick();
+  }
+  function stopConfigPolling() { if (configPollTimer) { clearInterval(configPollTimer); configPollTimer = null; } }
 
   function normToCanvas(nx, ny) {
     return { x: nx * baseCanvas.width, y: ny * baseCanvas.height };
