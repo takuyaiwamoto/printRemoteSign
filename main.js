@@ -44,6 +44,23 @@
   try { const b = document.getElementById('author-badge'); if (b) b.textContent = `ID:${AUTHOR_ID}`; } catch(_) {}
   let eraserActive = false;
 
+  // 背景と自分/他者レイヤ構成
+  let bgMode = 'white';
+  let bgImage = null; // HTMLImageElement
+  function drawBackground() {
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+    if (bgMode === 'image' && bgImage) {
+      ctx.drawImage(bgImage, 0,0, bgImage.naturalWidth, bgImage.naturalHeight, 0,0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    ctx.restore();
+  }
+
+  const selfLayer = { canvas: document.createElement('canvas'), ctx: null };
+  selfLayer.canvas.width = 1; selfLayer.canvas.height = 1; selfLayer.ctx = selfLayer.canvas.getContext('2d');
+  selfLayer.ctx.imageSmoothingEnabled = true; selfLayer.ctx.imageSmoothingQuality = 'high';
+
   // 他者描画レイヤとスムージング
   const otherLayers = new Map(); // authorId -> {canvas, ctx}
   const otherStrokes = new Map(); // strokeId -> state
@@ -58,6 +75,15 @@
     return otherLayers.get(author);
   }
   function resizeOtherLayers() {
+    // 自分レイヤ
+    {
+      const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
+      off.getContext('2d').drawImage(selfLayer.canvas, 0, 0, selfLayer.canvas.width, selfLayer.canvas.height, 0, 0, off.width, off.height);
+      selfLayer.canvas.width = off.width; selfLayer.canvas.height = off.height;
+      selfLayer.ctx = selfLayer.canvas.getContext('2d');
+      selfLayer.ctx.imageSmoothingEnabled = true; selfLayer.ctx.imageSmoothingQuality = 'high';
+      selfLayer.ctx.drawImage(off, 0, 0);
+    }
     for (const { canvas: c } of otherLayers.values()) {
       const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
       off.getContext('2d').drawImage(c, 0, 0, c.width, c.height, 0, 0, off.width, off.height);
@@ -67,7 +93,10 @@
   }
   function composeOthers() {
     ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawBackground();
     for (const { canvas: c } of otherLayers.values()) ctx.drawImage(c, 0, 0);
+    ctx.drawImage(selfLayer.canvas, 0, 0);
     ctx.restore();
   }
   function processOtherStrokes() {
@@ -130,7 +159,7 @@
         if (msg.phase === 'start') {
           const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
           const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
-          otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
+          otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), tool:(msg.tool||'pen'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
           const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
           if (SDEBUG) slog('sse other start', { id: msg.id, author: msg.authorId });
         } else if (msg.phase === 'point') {
@@ -159,12 +188,9 @@
         if (msg && msg.type) slog('ws message', msg.type);
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
           if (typeof msg.data.bgSender === 'string') {
-            ctx.save(); ctx.setTransform(1,0,0,1,0,0);
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+            bgMode = 'white'; bgImage = null; composeOthers();
           } else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) {
-            const img = new Image();
-            img.onload = () => { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(img,0,0,img.naturalWidth,img.naturalHeight,0,0,canvas.width,canvas.height); ctx.restore(); };
-            img.src = msg.data.bgSender.url;
+            const img = new Image(); img.onload = () => { bgMode = 'image'; bgImage = img; composeOthers(); }; img.src = msg.data.bgSender.url;
           }
         }
         if (msg && msg.type === 'stroke') {
@@ -173,7 +199,7 @@
           if (msg.phase === 'start') {
             const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
             const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
-            otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
+            otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), tool:(msg.tool||'pen'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
             const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
             slog('other start', { id: msg.id, author: msg.authorId });
           } else if (msg.phase === 'point') {
