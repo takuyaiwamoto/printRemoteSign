@@ -132,7 +132,8 @@
           }
         }
         if (msg && msg.type === 'stroke') {
-          if (!msg.authorId || msg.authorId === AUTHOR_ID) return;
+          // 旧クライアントから authorId が無い場合も“他人”として扱う
+          if (msg.authorId && msg.authorId === AUTHOR_ID) return;
           if (msg.phase === 'start') {
             const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
             const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };

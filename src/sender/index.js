@@ -91,7 +91,8 @@ transport.onmessage = (msg) => {
     }
   }
   if (msg.type === 'stroke') {
-    if (!msg.authorId || msg.authorId === AUTHOR_ID) return; // ignore own
+    // authorId が無い古いクライアントも“他人”として表示する
+    if (msg.authorId && msg.authorId === AUTHOR_ID) return; // ignore own
     const author = msg.authorId;
     if (msg.phase === 'start') {
       const cssW = cm.canvas.width; // device px width
