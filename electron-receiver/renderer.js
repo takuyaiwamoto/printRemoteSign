@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.11';
+  const RECEIVER_VERSION = '0.6.12';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
