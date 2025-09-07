@@ -72,6 +72,9 @@
     const s = Math.max(0.01, (scalePct || 100) / 100);
     if (scaler) scaler.style.transform = `scale(${s})`;
     if (rotator) rotator.style.transform = `rotate(${rotationDeg}deg)`;
+    // Fallback: apply to canvasBox directly if wrappers missing
+    if (!scaler && canvasBox) canvasBox.style.transform = `scale(${s})`;
+    if (!rotator && canvasBox) canvasBox.style.transform += ` rotate(${rotationDeg}deg)`;
   }
 
   // Now that transform vars are defined, wire resize and do initial fit
