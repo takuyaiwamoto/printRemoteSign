@@ -22,8 +22,17 @@
 
   function sendConfig(part, mode, url){
     const data = {};
-    if (mode === 'white') data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = 'white';
-    else data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = { mode: 'image', url: absoluteIfPossible(url) };
+    if (mode === 'white') {
+      data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = 'white';
+    } else {
+      let finalUrl = url;
+      if (!/^https?:/i.test(finalUrl)) {
+        // Prefer explicit assets base for sender so Pages配下を指す
+        if (part === 'sender' && ASSET_BASE) finalUrl = ASSET_BASE.replace(/\/$/, '/') + finalUrl.replace(/^\/+/, '');
+        else finalUrl = absoluteIfPossible(finalUrl);
+      }
+      data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = { mode: 'image', url: finalUrl };
+    }
     const msg = { type: 'config', data };
     if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
     fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,

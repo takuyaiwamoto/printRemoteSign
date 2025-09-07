@@ -4,4 +4,5 @@
 
 window.SERVER_URL = 'wss://printremotesign.onrender.com';
 window.CHANNEL = 'default';
-
+// GitHub Pages asset base for images like back2.png
+window.ASSET_BASE = 'https://takuyaiwamoto.github.io/printRemoteSign/';
