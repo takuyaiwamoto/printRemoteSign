@@ -184,7 +184,8 @@ app.post('/clear', (req, res) => {
   const ch = getChannel(channelName);
   const msg = { type: 'clear' };
   const txt = JSON.stringify(msg);
-  broadcast(ch, txt, (c) => c.role === 'receiver');
+  // Broadcast to all roles so that senders also clear their local canvases
+  broadcast(ch, txt, () => true);
   broadcastSSE(ch, msg);
   ch.lastFrame = null;
   res.json({ ok: true });
