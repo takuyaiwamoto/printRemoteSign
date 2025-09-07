@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.12';
+  const RECEIVER_VERSION = '0.6.13';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -42,10 +42,7 @@
     if (ink) { ink.imageSmoothingEnabled = true; ink.imageSmoothingQuality = 'high'; }
   }
 
-  // Resize -> reflow canvases then repaint background
-  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
-  // Initial size
-  fitCanvas(); applyBoxTransform();
+  // (moved) Resize handler and initial fit are set after transform vars are declared
 
   let ws;
   let reconnectTimer = null;
@@ -76,6 +73,10 @@
     if (scaler) scaler.style.transform = `scale(${s})`;
     if (rotator) rotator.style.transform = `rotate(${rotationDeg}deg)`;
   }
+
+  // Now that transform vars are defined, wire resize and do initial fit
+  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
+  fitCanvas(); applyBoxTransform();
 
   // Realtime stroke rendering state
   const strokes = new Map(); // id -> { author, color, sizeCss, sizeDev, points: [{x,y,time}], drawnUntil: number, ended: boolean }
