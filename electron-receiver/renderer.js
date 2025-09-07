@@ -484,9 +484,9 @@ function startConfetti(spawnWindowMs = 700) {
       const W=cv.width, H=cv.height; const y = H - 4*DPR; const x = side==='left' ? 6*DPR : W - 6*DPR;
       const count = 6; // 量を半分に
       for (let i=0;i<count;i++){
-        // 目標は中央より上（高さ15%付近）
+        // 目標は高さ40%付近（中央やや上）
         const targetX = W*0.5 + (Math.random()-0.5)*0.14*W;
-        const targetY = H*0.15 + (Math.random()-0.5)*0.05*H;
+        const targetY = H*0.40 + (Math.random()-0.5)*0.06*H;
         const dx = targetX - x, dy = targetY - y;
         const len = Math.max(1, Math.hypot(dx,dy));
         const ux = dx/len, uy = dy/len; // unit vector toward target
