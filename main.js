@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.8.5';
+  const SENDER_VERSION = '0.8.6';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -177,6 +177,8 @@
     es.addEventListener('clear', () => {
       ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
       for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+      selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+      composeOthers();
       if (SDEBUG) slog('sse clear all');
     });
   }
@@ -214,8 +216,11 @@
           } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; }
         }
         if (msg && msg.type === 'clear') {
+          // clear background + all author layers + my layer
           ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
           for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+          selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+          composeOthers();
           slog('clear all received');
         }
         if (msg && msg.type === 'clearMine') {

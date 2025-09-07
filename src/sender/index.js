@@ -2,7 +2,7 @@ import { Transport } from './transport.js';
 import { CanvasManager } from './canvas.js';
 import { wireUI } from './ui.js';
 
-const SENDER_VERSION = '0.8.5';
+const SENDER_VERSION = '0.8.6';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 const qs = new URLSearchParams(location.search);
@@ -107,7 +107,8 @@ transport.onmessage = (msg) => {
     }
   }
   if (msg.type === 'clear') {
-    // clear all layers
+    // clear all layers (including my local canvas)
+    try { cm.clear(); } catch(_) {}
     for (const {canvas,ctx} of otherLayers.values()) { ctx.clearRect(0,0,canvas.width,canvas.height); }
     composeOthers();
   }

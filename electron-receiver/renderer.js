@@ -26,13 +26,7 @@
 
   // (moved) Resize handler and initial fit are set after transform vars are declared
 
-  let ws;
-  let reconnectTimer = null;
   let lastInfo = '';
-  let httpPollTimer = null;
-  let es = null; // EventSource fallback
-  const toHttpBase = (u) => u.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://').replace(/\/$/, '');
-  const toWsBase = (u) => u.replace(/^http/, 'ws').replace(/\/$/, '');
 
   // Smoother rendering pipeline: coalesce frames, decode off-thread, draw on RAF
   let latestDataURL = null;
@@ -71,108 +65,7 @@
     }
   }
 
-  function connect() {
-    const url = `${toWsBase(SERVER)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
-    try {
-      ws = new WebSocket(url);
-    } catch (e) {
-      setStatus('接続エラー (WS)');
-      startHttpPolling();
-      return;
-    }
-    ws.binaryType = 'arraybuffer';
-    setStatus('接続中…');
-
-    ws.onopen = () => { setStatus('受信待機'); stopHttpPolling(); stopSSE(); startConfigPolling(); };
-    ws.onclose = () => {
-      setStatus('切断、再接続待ち…');
-      if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1000);
-      startHttpPolling(); startConfigPolling();
-      startSSE();
-    };
-    ws.onerror = () => { setStatus('通信エラー'); startHttpPolling(); startSSE(); startConfigPolling(); };
-    ws.onmessage = async (ev) => {
-      let msg;
-      try {
-        msg = typeof ev.data === 'string' ? JSON.parse(ev.data) : null;
-      } catch (_) {
-        return; // ignore
-      }
-      if (!msg || typeof msg !== 'object') return;
-      if (msg.type === 'hello') {
-        setInfo('接続済み');
-        return;
-      }
-      if (msg.type === 'frame' && typeof msg.data === 'string') {
-        if (!ignoreFrames) ingestFrame(msg.data);
-        return;
-      }
-      if (msg.type === 'clear') { window.StrokeEngine?.clearAll?.(); clearCanvas(); return; }
-      if (msg.type === 'config' && msg.data) { applyConfig(msg.data); return; }
-      if (msg.type === 'stroke') { if (msg.phase==='start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(msg); return; }
-    };
-  }
-
-  function startHttpPolling() {
-    if (httpPollTimer) return;
-    const httpBase = toHttpBase(SERVER);
-    const u = `${httpBase}/last?channel=${encodeURIComponent(CHANNEL)}`;
-    const tick = async () => {
-      try {
-        const r = await fetch(u, { cache: 'no-store' });
-        if (r.ok) {
-          const j = await r.json();
-          if (j && j.type === 'frame' && typeof j.data === 'string' && j.data) {
-            ingestFrame(j.data);
-          }
-        }
-      } catch (_) {}
-    };
-    httpPollTimer = setInterval(tick, 300);
-    tick();
-  }
-
-  function stopHttpPolling() {
-    if (httpPollTimer) { clearInterval(httpPollTimer); httpPollTimer = null; }
-  }
-
-  function startSSE() {
-    if (es) return;
-    const httpBase = toHttpBase(SERVER);
-    const url = `${httpBase}/events?channel=${encodeURIComponent(CHANNEL)}`;
-    try {
-      es = new EventSource(url, { withCredentials: false });
-    } catch (_) {
-      return;
-    }
-    setStatus('SSE接続中…');
-    es.addEventListener('hello', () => setStatus('受信待機 (SSE)'));
-    es.addEventListener('frame', (ev) => {
-      try { const j = JSON.parse(ev.data); if (j && j.data) ingestFrame(j.data); } catch (_) {}
-    });
-    es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); if (m && m.phase==='start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(m); } catch (_) {} });
-    es.addEventListener('clear', () => { clearCanvas(); strokes.clear(); });
-    es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) applyConfig(j.data); } catch (_) {} });
-    es.onerror = () => { /* will auto-retry; keep http polling too */ };
-  }
-
-  function stopSSE() {
-    if (es) { try { es.close(); } catch (_) {}; es = null; }
-  }
-
-  // Periodic config fetch as a safety net (in case WS config messages are missed)
-  let configPollTimer = null;
-  function startConfigPolling() {
-    if (configPollTimer) return;
-    const httpBase = toHttpBase(SERVER);
-    const url = `${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`;
-    const tick = async () => {
-      try { const r = await fetch(url, { cache:'no-store' }); if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') applyConfig(j); } } catch (_) {}
-    };
-    configPollTimer = setInterval(tick, 2000);
-    tick();
-  }
-  function stopConfigPolling() { if (configPollTimer) { clearInterval(configPollTimer); configPollTimer = null; } }
+  // networking moved to ReceiverNet
 
   function normToCanvas(nx, ny) { return { x: nx * baseCanvas.width, y: ny * baseCanvas.height }; }
 
@@ -469,5 +362,16 @@
   clearCanvas();
   applyBoxTransform();
   ensureRAF();
-  connect();
+  const net = window.ReceiverNet?.create?.({
+    server: SERVER,
+    channel: CHANNEL,
+    onFrame: (data) => { if (!ignoreFrames) ingestFrame(data); },
+    onStroke: (m) => { if (m?.phase === 'start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(m); },
+    onClear: () => { window.StrokeEngine?.clearAll?.(); clearCanvas(); },
+    onConfig: (d) => applyConfig(d),
+    setStatus: (t) => setStatus(t),
+    setInfo: (t) => setInfo(t),
+    log: (...a) => log(...a)
+  });
+  net?.start?.();
 })();
