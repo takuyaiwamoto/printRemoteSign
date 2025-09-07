@@ -295,6 +295,7 @@
       strokes.set(id, s);
       // 即時に開始点を指定太さで可視化（細く見える問題を避ける）
       const lay = getAuthorLayer(s.author).ctx;
+      lay.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
       lay.beginPath(); lay.fillStyle = s.color; lay.arc(p.x, p.y, s.sizeDev/2, 0, Math.PI*2); lay.fill();
       // 合成
       ink.save(); ink.setTransform(1,0,0,1,0,0); ink.drawImage(getAuthorLayer(s.author).canvas,0,0); ink.restore();

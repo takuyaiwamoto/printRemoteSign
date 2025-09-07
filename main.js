@@ -311,32 +311,32 @@
     points.push({ x, y });
 
     const n = points.length;
-    // set composite mode for eraser
-    if (eraserActive) ctx.globalCompositeOperation = 'destination-out';
+    const tctx = selfLayer.ctx;
+    tctx.globalCompositeOperation = eraserActive ? 'destination-out' : 'source-over';
+    tctx.lineJoin = 'round'; tctx.lineCap = 'round';
+    tctx.strokeStyle = brushColor; tctx.lineWidth = brushSizeCssPx * DPR;
     if (n === 2) {
-      // 開始直後は直線でつなぐ
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      ctx.lineTo(points[1].x, points[1].y);
-      ctx.stroke();
+      tctx.beginPath();
+      tctx.moveTo(points[0].x, points[0].y);
+      tctx.lineTo(points[1].x, points[1].y);
+      tctx.stroke();
     } else if (n >= 3) {
-      // 中点ベジェ法: m1=(p0,p1の中点), m2=(p1,p2の中点) を p1 を制御点とする二次曲線で結ぶ
       const p0 = points[n - 3];
       const p1 = points[n - 2];
       const p2 = points[n - 1];
       const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
       const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-      ctx.beginPath();
-      ctx.moveTo(m1.x, m1.y);
-      ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
-      ctx.stroke();
+      tctx.beginPath();
+      tctx.moveTo(m1.x, m1.y);
+      tctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+      tctx.stroke();
     }
 
     lastX = x;
     lastY = y;
     // 描画中のフレーム送信は既定で無効（座標ストリームを優先）
     if (SEND_FRAMES_DURING_DRAW) maybeSendFrame();
-    if (eraserActive) { composeOthers(); }
+    composeOthers();
 
     // Realtime stroke point
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
@@ -357,26 +357,20 @@
     // 末端の処理（タップや短い線への対応）
     const n = points.length;
     if (n === 1) {
-      // 点を描く（塗りつぶしの円）
-      ctx.beginPath();
-      ctx.fillStyle = brushColor;
-      ctx.arc(points[0].x, points[0].y, (brushSizeCssPx * DPR) / 2, 0, Math.PI * 2);
-      ctx.fill();
+      const tctx = selfLayer.ctx; tctx.beginPath(); tctx.fillStyle = brushColor; tctx.globalCompositeOperation = eraserActive?'destination-out':'source-over';
+      tctx.arc(points[0].x, points[0].y, (brushSizeCssPx * DPR) / 2, 0, Math.PI * 2); tctx.fill();
     } else if (n >= 3) {
-      // 最後の中点から最終点までを結ぶ
-      const p0 = points[n - 3];
-      const p1 = points[n - 2];
-      const p2 = points[n - 1];
+      const p0 = points[n - 3]; const p1 = points[n - 2]; const p2 = points[n - 1];
       const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-      ctx.beginPath();
-      ctx.moveTo(mPrev.x, mPrev.y);
-      ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
-      ctx.stroke();
+      const tctx = selfLayer.ctx; tctx.globalCompositeOperation = eraserActive?'destination-out':'source-over';
+      tctx.beginPath(); tctx.moveTo(mPrev.x, mPrev.y); tctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); tctx.stroke();
     }
     points = [];
 
     // reset composite after erasing
     if (eraserActive) ctx.globalCompositeOperation = 'source-over';
+    // reset composite after eraser
+    selfLayer.ctx.globalCompositeOperation = 'source-over';
     // リアルタイム座標が使えている場合はフレーム送信しない（太さやエッジの差異を避ける）
     if (!realtimeEverUsed) sendFrame(true);
 
@@ -449,12 +443,9 @@
 
   // 全消去（白で塗りつぶし）
   clearBtn?.addEventListener('click', () => {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    if (!realtimeEverUsed) sendFrame(true);
+    // 自分のレイヤのみをクリアし、背景は維持
+    selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+    composeOthers();
     if (wsReady) {
       try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
@@ -463,13 +454,10 @@
     }
   });
   clearAllBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
-    // 直接実行（ヘッダが無い場合）
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    if (!realtimeEverUsed) sendFrame(true);
+    // 直接実行（ヘッダが無い場合）: レイヤだけ消す
+    selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+    for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+    composeOthers();
     if (wsReady) {
       try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
