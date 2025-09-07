@@ -136,8 +136,10 @@ canvas {
 @media (max-width: 900px) {
   .stage { grid-template-columns: 1fr; }
   .side-tools {
-    justify-self: stretch; /* 横幅いっぱいを使って折り返し */
+    justify-self: center; /* 下段では中央寄せに */
     grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    max-width: 520px; /* ボタン群の最大幅を制限して中央に集約 */
+    justify-items: center;
   }
   .side-tools .group { grid-auto-flow: column; }
   .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: column; }
