@@ -43,7 +43,7 @@
   }
 
   // Resize -> reflow canvases then repaint background
-  window.addEventListener('resize', () => { log('resize'); fitCanvas(); try { drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
+  window.addEventListener('resize', () => { log('resize'); fitCanvas(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
   // Initial size
   fitCanvas();
 
@@ -336,8 +336,9 @@
       ink.lineWidth = s.sizeDev || (s.sizeCss * DPR);
 
       let drew = false;
-      ink.beginPath();
-      ink.moveTo(s.lastPt.x, s.lastPt.y);
+      const ctx = getAuthorLayer(String(s.author || 'anon')).ctx;
+      ctx.beginPath();
+      ctx.moveTo(s.lastPt.x, s.lastPt.y);
 
       // Helper to sample quadratic Bezier
       const qPoint = (m1, p1, m2, t) => {
@@ -366,7 +367,7 @@
         while (s.t < desiredT - 1e-6) {
           const nextT = Math.min(desiredT, s.t + dt);
           const np = qPoint(m1, p1, m2, nextT);
-          ink.lineTo(np.x, np.y);
+          ctx.lineTo(np.x, np.y);
           s.lastPt = np;
           s.t = nextT;
           drew = true;
@@ -383,7 +384,7 @@
         }
       }
 
-      if (drew) ink.stroke();
+      if (drew) ctx.stroke();
 
       // Clean up ended strokes when all segments consumed and last segment finished
       const lastSegment = s.points.length - 1;
@@ -444,6 +445,7 @@
           ink.save();
           ink.setTransform(1, 0, 0, 1, 0, 0);
           ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+          for (const { canvas } of authorLayers.values()) ink.drawImage(canvas, 0, 0);
           ink.restore();
         }
         lastDrawnVersion = frameVersion;

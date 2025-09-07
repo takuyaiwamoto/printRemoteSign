@@ -1,8 +1,9 @@
 // UI wiring for size/color/clear buttons
-export function wireUI({ canvasManager, transport }) {
+export function wireUI({ canvasManager, transport, authorId, onResize }) {
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
-  const clearSideBtn = document.getElementById('btn-clear');
+  const clearAllBtn = document.getElementById('btn-clear-all');
+  const clearMineBtn = document.getElementById('btn-clear-mine');
   const sizeInput = document.getElementById('size');
   const colorInput = document.getElementById('color');
 
@@ -40,8 +41,18 @@ export function wireUI({ canvasManager, transport }) {
     canvasManager.clear();
     transport?.sendClear?.();
   }
-  clearSideBtn?.addEventListener('click', performClear);
+  clearAllBtn?.addEventListener('click', performClear);
+  clearMineBtn?.addEventListener('click', () => {
+    // local clear self layer only: since we mix local + others on the same canvas,
+    // we just clear the whole canvas here (local content), then ask others to clear our layer.
+    canvasManager.clear();
+    if (transport) transport.wsSend ? transport.wsSend({ type:'clearMine', authorId }) : transport.sendClear?.();
+    // HTTP fallback
+    try { transport.httpPost?.('/config', { noop: true }); } catch(_) {}
+  });
+
+  // Hook resize to external listener to resize layers for others
+  window.addEventListener('resize', () => onResize && onResize());
 
   return { performClear };
 }
-

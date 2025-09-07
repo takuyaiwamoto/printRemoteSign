@@ -85,9 +85,9 @@ canvas {
   display: grid; place-items: center;
   cursor: pointer;
 }
-.action-btn { /* 全削除 */
+.action-btn { /* 操作ボタン */
   appearance: none;
-  width: 44px; height: 44px;
+  width: 88px; height: 44px;
   border-radius: 10px;
   border: 1px solid #d1d5db;
   background: #fff;

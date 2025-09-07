@@ -80,16 +80,24 @@ wss.on('connection', (ws, req) => {
       // Basic validation
       if (!msg.phase) return;
       const relay = JSON.stringify(msg);
-      broadcast(ch, relay, (c) => c.role === 'receiver');
+      // Broadcast to all roles (senders also見る)
+      broadcast(ch, relay, () => true);
       broadcastSSE(ch, msg);
       return;
     }
 
-    if (msg.type === 'clear') {
+    if (msg.type === 'clear' || msg.type === 'clearAll') {
       const relay = JSON.stringify({ type: 'clear' });
-      broadcast(ch, relay, (c) => c.role === 'receiver');
+      broadcast(ch, relay, () => true);
       broadcastSSE(ch, { type: 'clear' });
       ch.lastFrame = null; // new receivers start blank
+      return;
+    }
+
+    if (msg.type === 'clearMine' && msg.authorId) {
+      const relay = JSON.stringify({ type: 'clearMine', authorId: String(msg.authorId) });
+      broadcast(ch, relay, () => true);
+      broadcastSSE(ch, { type: 'clearMine', authorId: String(msg.authorId) });
       return;
     }
 

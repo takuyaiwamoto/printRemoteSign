@@ -35,6 +35,7 @@ export class Transport {
     if (!this.wsReady) return false;
     try { this.ws.send(JSON.stringify(obj)); return true; } catch (_) { return false; }
   }
+  get wsReadyFlag() { return this.wsReady; }
   httpPost(path, body) {
     if (!this.serverUrl) return;
     const u = `${this.toHttpBase(this.serverUrl)}${path}?channel=${encodeURIComponent(this.channel)}`;
