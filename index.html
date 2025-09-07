@@ -29,8 +29,14 @@
       <!-- 右側ツール群（縦三列の太さ / 隣に色ボタン） -->
       <aside class="side-tools" aria-label="ツール">
         <div class="group sizes" aria-label="ペン太さ">
-          <button class="size-btn active" data-size-cycle="thin,normal,thick" title="太さ切替" aria-pressed="true">
+          <button class="size-btn active" data-size="thin" title="細い" aria-pressed="true">
+            <span class="stroke stroke-thin"></span>
+          </button>
+          <button class="size-btn" data-size="normal" title="普通" aria-pressed="false">
             <span class="stroke stroke-normal"></span>
+          </button>
+          <button class="size-btn" data-size="thick" title="太い" aria-pressed="false">
+            <span class="stroke stroke-thick"></span>
           </button>
         </div>
         <div class="group colors" aria-label="色">
