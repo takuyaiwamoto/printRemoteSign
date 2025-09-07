@@ -12,6 +12,8 @@
   const colorInput = document.getElementById('color');
   const clearBtn = document.getElementById('clear');
   const saveBtn = document.getElementById('save');
+  const clearAllBtn = document.getElementById('btn-clear-all');
+  const clearMineBtn = document.getElementById('btn-clear-mine');
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearSideBtn = document.getElementById('btn-clear');
@@ -36,6 +38,65 @@
   let httpFallback = false;
   let currentStrokeId = null;
   let realtimeEverUsed = false; // 一度でも座標ストリームを使ったらフレーム送信を抑制
+  const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
+
+  // 他者描画レイヤとスムージング
+  const otherLayers = new Map(); // authorId -> {canvas, ctx}
+  const otherStrokes = new Map(); // strokeId -> state
+  const OTHER_BUFFER_MS = 200;
+
+  function getOtherLayer(author) {
+    if (!otherLayers.has(author)) {
+      const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+      const k = c.getContext('2d'); k.imageSmoothingEnabled = true; k.imageSmoothingQuality = 'high';
+      otherLayers.set(author, { canvas: c, ctx: k });
+    }
+    return otherLayers.get(author);
+  }
+  function resizeOtherLayers() {
+    for (const { canvas: c } of otherLayers.values()) {
+      const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
+      off.getContext('2d').drawImage(c, 0, 0, c.width, c.height, 0, 0, off.width, off.height);
+      c.width = off.width; c.height = off.height;
+      c.getContext('2d').drawImage(off, 0, 0);
+    }
+  }
+  function composeOthers() {
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+    for (const { canvas: c } of otherLayers.values()) ctx.drawImage(c, 0, 0);
+    ctx.restore();
+  }
+  function processOtherStrokes() {
+    const now = performance.now();
+    const target = now - OTHER_BUFFER_MS;
+    let changed = false;
+    for (const [id, s] of otherStrokes) {
+      const ready = (()=>{ for (let i=s.points.length-1;i>=2;i--) if (s.points[i].time<=target) return i; return 0; })();
+      if (s.curIndex === undefined) {
+        if (ready>=2) { s.curIndex=2; s.t=0; const p0=s.points[0], p1=s.points[1]; s.lastPt={x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2}; }
+        else continue;
+      }
+      const layer = getOtherLayer(s.author).ctx;
+      layer.lineJoin='round'; layer.lineCap='round'; layer.strokeStyle=s.color; layer.lineWidth=s.sizeDev || (s.sizeCss*DPR);
+      let drew=false; layer.beginPath(); layer.moveTo(s.lastPt.x, s.lastPt.y);
+      const q=(m1,p1,m2,t)=>{const a=1-t; return {x:a*a*m1.x+2*a*t*p1.x+t*t*m2.x,y:a*a*m1.y+2*a*t*p1.y+t*t*m2.y}};
+      while (s.curIndex<=ready) {
+        const i=s.curIndex; const p0=s.points[i-2], p1=s.points[i-1], p2=s.points[i];
+        const m1={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2}, m2={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+        const segLen=Math.hypot(m2.x-m1.x,m2.y-m1.y)+1e-3; const stepPx=Math.max(0.8*DPR,0.5*(s.sizeDev||s.sizeCss*DPR));
+        const dt=Math.min(0.35, Math.max(0.02, stepPx/segLen));
+        const dur=Math.max(1,(s.points[i].time||0)-(s.points[i-1].time||0)); const timeT=Math.max(0,Math.min(1,(target-(s.points[i-1].time||0))/dur));
+        const desired=(i<ready)?1:timeT;
+        while(s.t<desired-1e-6){ const nt=Math.min(desired,s.t+dt); const np=q(m1,p1,m2,nt); layer.lineTo(np.x,np.y); s.lastPt=np; s.t=nt; drew=true; if(s.t>=1-1e-6)break; }
+        if (s.t>=1-1e-6){ s.curIndex++; s.t=0; s.lastPt={...m2}; } else break;
+      }
+      if (drew){ layer.stroke(); changed=true; }
+      if (s.ended && s.curIndex > s.points.length-1) otherStrokes.delete(id);
+    }
+    if (changed) composeOthers();
+    requestAnimationFrame(processOtherStrokes);
+  }
+  requestAnimationFrame(processOtherStrokes);
 
   // --- Transport helpers -------------------------------------------------
   const toHttpBase = (u) => u.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://').replace(/\/$/, '');
@@ -69,6 +130,25 @@
             img.onload = () => { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(img,0,0,img.naturalWidth,img.naturalHeight,0,0,canvas.width,canvas.height); ctx.restore(); };
             img.src = msg.data.bgSender.url;
           }
+        }
+        if (msg && msg.type === 'stroke') {
+          if (!msg.authorId || msg.authorId === AUTHOR_ID) return;
+          if (msg.phase === 'start') {
+            const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
+            const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
+            otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
+            const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
+          } else if (msg.phase === 'point') {
+            const s = otherStrokes.get(msg.id); if (!s) return; const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() }; s.points.push(p);
+          } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; }
+        }
+        if (msg && msg.type === 'clear') {
+          ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+          for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+        }
+        if (msg && msg.type === 'clearMine') {
+          const lay = otherLayers.get(String(msg.authorId)); if (lay) { lay.ctx.clearRect(0,0,lay.canvas.width, lay.canvas.height); composeOthers(); }
+          if (msg.authorId === AUTHOR_ID) { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); }
         }
       } catch(_) {}
     };
@@ -170,9 +250,9 @@
       const cssW = canvas.width / DPR;
       const sizeN = brushSizeCssPx / cssW; // キャンバス幅に対する相対太さ
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID })); } catch (_) {}
       } else {
-        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN });
+        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID });
       }
       realtimeEverUsed = true;
     }
@@ -216,9 +296,9 @@
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       const nx = x / canvas.width, ny = y / canvas.height;
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID })); } catch (_) {}
       } else {
-        queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny });
+        queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID });
       }
     }
   }
@@ -254,10 +334,10 @@
     // Realtime stroke end
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID })); } catch (_) {}
       } else {
         postStrokeBatchFlush();
-        postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId });
+        postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID });
       }
       currentStrokeId = null;
     }
@@ -331,7 +411,7 @@
       fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   });
-  clearSideBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
+  clearAllBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
     // 直接実行（ヘッダが無い場合）
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -346,6 +426,13 @@
       fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   })());
+
+  clearMineBtn?.addEventListener('click', () => {
+    // 自分キャンバスの消去 + 自分レイヤの削除通知
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+    if (wsReady) { try { ws.send(JSON.stringify({ type:'clearMine', authorId: AUTHOR_ID })); } catch(_) {} }
+    else if (httpFallback && SERVER_URL) { httpPost('/config', { noop:true }); }
+  });
 
   // ---- HTTP stroke batching helpers ----
   let postQueue = [];
@@ -375,5 +462,5 @@
 
   // 初期化 & リサイズ（内容保持）
   fitToViewport(false);
-  window.addEventListener('resize', () => fitToViewport(true));
+  window.addEventListener('resize', () => { fitToViewport(true); resizeOtherLayers(); composeOthers(); });
 })();
