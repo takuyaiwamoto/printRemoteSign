@@ -259,6 +259,12 @@
   // 画面に収まる最大サイズで A4 縦比率を維持してラップ要素の幅のみ制御
   // 高さは CSS の aspect-ratio で自動決定し、その実サイズからキャンバス解像度を設定
   function fitToViewport(preserve = false) {
+    if (window.SenderShared?.layout?.fitToViewport) {
+      window.SenderShared.layout.fitToViewport({ canvas, wrap, DPR, ratio: RATIO, preserve });
+      // draw initial background if none
+      if (!preserve) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      return;
+    }
     const pad = 24; // 余白
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);

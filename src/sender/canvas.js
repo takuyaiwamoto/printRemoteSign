@@ -41,6 +41,13 @@ export class CanvasManager {
   }
 
   fitToViewport(preserve = false) {
+    if (typeof window !== 'undefined' && window.SenderShared?.layout?.fitToViewport) {
+      window.SenderShared.layout.fitToViewport({ canvas: this.canvas, wrap: this.wrap, DPR: this.DPR, ratio: this.RATIO, preserve });
+      this._applyBrush();
+      const ctx = this.ctx;
+      if (!preserve) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height); }
+      return;
+    }
     const pad = 24;
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);
