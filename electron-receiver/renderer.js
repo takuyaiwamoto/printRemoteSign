@@ -282,7 +282,7 @@
           ink.save();
           ink.setTransform(1, 0, 0, 1, 0, 0);
           ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
-          for (const { canvas } of authorLayers.values()) ink.drawImage(canvas, 0, 0);
+          window.StrokeEngine?.compositeTo?.(ink);
           ink.restore();
         }
         lastDrawnVersion = frameVersion;

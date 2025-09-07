@@ -2,6 +2,7 @@
   const qs = new URLSearchParams(location.search);
   const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
   const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
+  const ASSET_BASE = (qs.get('assets') || window.ASSET_BASE || '').trim(); // e.g. https://takuyaiwamoto.github.io/printRemoteSign/
   if (!SERVER_URL) { console.warn('SERVER_URL is empty; settings will not broadcast.'); }
 
   function toWs(u){ return u.replace(/^http/, 'ws').replace(/\/$/, ''); }
@@ -39,11 +40,14 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
 
-  // file:// の場合、相対パスで選んだ画像は ../ にフォールバックしてみる
+  // 画像URLの正規化
   function normalizeLocalUrl(u){
     if (!u) return u;
     if (/^https?:/i.test(u)) return u;
-    if (location.protocol === 'file:') return '../' + u.replace(/^\/+/, '');
+    if (location.protocol === 'file:') {
+      if (ASSET_BASE) return (ASSET_BASE.replace(/\/$/, '/') + u.replace(/^\/+/, ''));
+      return '../' + u.replace(/^\/+/, '');
+    }
     return u;
   }
 
@@ -73,4 +77,3 @@
     clearTimeout(timer); timer = setTimeout(() => sendScaleReceiver(scaleEl.value), 100);
   });
 })();
-
