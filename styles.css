@@ -69,7 +69,7 @@ canvas {
   grid-auto-flow: row; /* 上から: 太さ/色 → 操作 */
   grid-template-columns: repeat(2, auto); /* 左:太さ 右:色 */
   gap: 8px; /* 行/列の隙間 */
-  justify-self: start; /* キャンバス側へ寄せる */
+  justify-self: start; /* キャンバス側へ寄せる（ワイド時） */
   align-items: start; /* 縦方向で余白を作らない */
 }
 .side-tools .group {
@@ -132,9 +132,13 @@ canvas {
   grid-column: 1 / -1;
 }
 
-@media (max-width: 680px) {
+/* タブレット含めた狭幅: 1カラムにしてツールは折り返し可能に */
+@media (max-width: 900px) {
   .stage { grid-template-columns: 1fr; }
-  .side-tools { justify-self: center; grid-auto-flow: row; grid-template-columns: repeat(5, 44px); }
+  .side-tools {
+    justify-self: stretch; /* 横幅いっぱいを使って折り返し */
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  }
   .side-tools .group { grid-auto-flow: column; }
   .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: row; }
 }
