@@ -110,10 +110,14 @@ transport.onmessage = (msg) => {
     // clear all layers (including my local canvas)
     try { cm.clear(); } catch(_) {}
     for (const {canvas,ctx} of otherLayers.values()) { ctx.clearRect(0,0,canvas.width,canvas.height); }
+    strokes.clear(); // stop any pending stroke rendering from re-drawing
     composeOthers();
   }
   if (msg.type === 'clearMine') {
-    const { authorId } = msg; const lay = otherLayers.get(authorId); if (lay) { lay.ctx.clearRect(0,0,lay.canvas.width, lay.canvas.height); composeOthers(); }
+    const { authorId } = msg; const lay = otherLayers.get(authorId); if (lay) { lay.ctx.clearRect(0,0,lay.canvas.width, lay.canvas.height); }
+    // remove queued strokes of that author to prevent reappearing lines
+    for (const [id, s] of Array.from(strokes.entries())) { if (String(s.author) === String(authorId)) strokes.delete(id); }
+    composeOthers();
   }
 };
 
@@ -127,6 +131,7 @@ transport.onmessage = (msg) => {
       // Mimic the same behavior as WS clear: clear local + others
       try { cm.clear(); } catch(_) {}
       for (const {canvas, ctx} of otherLayers.values()) ctx.clearRect(0,0,canvas.width,canvas.height);
+      strokes.clear();
       composeOthers();
     });
   } catch(_) { /* ignore: environments without EventSource */ }

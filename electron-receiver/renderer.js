@@ -36,8 +36,6 @@
   let lastDrawnVersion = -1;
   let rafRunning = false;
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
-  let bgMode = 'white';
-  let bgImage = null; // ImageBitmap or HTMLImageElement
   const { canvasBox, scaler, rotator } = (window.CanvasLayout?.getElements?.() || {
     canvasBox: document.getElementById('canvasBox'),
     scaler: document.getElementById('scaler'),
@@ -50,8 +48,16 @@
     window.CanvasLayout?.applyTransform?.({ scalePct, rotationDeg, elements: { canvasBox, scaler, rotator } });
   }
 
+  // Initialize config module (scale/rotate callbacks)
+  window.ReceiverConfig?.init?.({
+    base: baseCanvas,
+    onScaleCb: (v) => { scalePct = v; applyBoxTransform(); log('scaleReceiver applied', { v, factor: v/100 }); },
+    onRotateCb: (deg) => { rotationDeg = deg === 180 ? 180 : 0; applyBoxTransform(); log('rotateReceiver applied', { rotationDeg }); },
+    logCb: (...a) => log(...a)
+  });
+
   // Now that transform vars are defined, wire resize and do initial fit
-  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
+  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); window.ReceiverConfig?.drawBackground?.(base); } catch(e) { log('drawBackground error on resize', e); } });
   fitCanvas(); applyBoxTransform();
 
   // Realtime stroke rendering state (moved to StrokeEngine)
@@ -72,7 +78,7 @@
   function clearCanvas() {
     if (!base || !ink) return;
     log('clearCanvas');
-    drawBackground();
+    window.ReceiverConfig?.drawBackground?.(base);
     ink.save();
     ink.setTransform(1, 0, 0, 1, 0, 0);
     ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
@@ -81,76 +87,9 @@
     ink.save(); ink.setTransform(1,0,0,1,0,0); window.StrokeEngine?.compositeTo?.(ink); ink.restore();
   }
 
-  function drawBackground() {
-    log('drawBackground', { mode: bgMode, hasImg: !!bgImage, cw: baseCanvas.width, ch: baseCanvas.height });
-    base.save();
-    base.setTransform(1, 0, 0, 1, 0, 0);
-    if (bgMode === 'image' && bgImage) {
-      const sw = bgImage.width || bgImage.naturalWidth; const sh = bgImage.height || bgImage.naturalHeight;
-      const cw = baseCanvas.width, ch = baseCanvas.height;
-      const sRatio = sw / sh, cRatio = cw / ch;
-      let sx = 0, sy = 0, sWidth = sw, sHeight = sh;
-      if (sRatio > cRatio) { sWidth = sh * cRatio; sx = (sw - sWidth) / 2; }
-      else if (sRatio < cRatio) { sHeight = sw / cRatio; sy = (sh - sHeight) / 2; }
-      log('drawBackground cover', { sw, sh, cw, ch, sx, sy, sWidth, sHeight, sRatio, cRatio });
-      base.drawImage(bgImage, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
-    } else {
-      base.fillStyle = '#ffffff'; base.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-    }
-    base.restore();
-  }
+  // drawBackground moved to ReceiverConfig
 
-  function applyConfig(data) {
-    log('applyConfig', data);
-    if (data.bgReceiver) {
-      if (typeof data.bgReceiver === 'string') { bgMode = data.bgReceiver; bgImage = null; clearCanvas(); }
-      else if (data.bgReceiver.mode === 'image' && data.bgReceiver.url) {
-        const inUrl = data.bgReceiver.url;
-        const candidates = [];
-        if (/^https?:/i.test(inUrl)) {
-          candidates.push(inUrl);
-        } else {
-          try { candidates.push(new URL(inUrl, location.href).href); } catch(_) {}
-          try { candidates.push(new URL('../' + inUrl, location.href).href); } catch(_) {}
-        }
-        log('bgReceiver candidates', candidates);
-        (async () => {
-          for (const url of candidates) {
-            try {
-              const isHttp = /^https?:/i.test(url);
-              if (isHttp && typeof createImageBitmap === 'function') {
-                const bmp = await createImageBitmap(await (await fetch(url)).blob());
-                bgImage = bmp; bgMode = 'image'; log('bg loaded via bitmap', url, { w: bmp.width, h: bmp.height }); clearCanvas(); return;
-              } else {
-                // For file:// (and as a safe fallback), use Image element loader
-                await new Promise((res, rej) => {
-                  const img = new Image();
-                  img.onload = () => { bgImage = img; bgMode = 'image'; log('bg loaded via Image', url, { w: img.naturalWidth, h: img.naturalHeight }); clearCanvas(); res(); };
-                  img.onerror = rej;
-                  img.src = url;
-                });
-                return;
-              }
-            } catch(err) { log('bg load failed', url, err?.message || err); /* try next candidate */ }
-          }
-          log('bg load all candidates failed; fallback white');
-          bgMode = 'white'; bgImage = null; clearCanvas();
-        })();
-      }
-    }
-    if (typeof data.scaleReceiver === 'number') {
-      const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100)));
-      scalePct = v;
-      applyBoxTransform();
-      log('scaleReceiver applied', { v, factor: v/100 });
-    }
-    if (typeof data.rotateReceiver !== 'undefined') {
-      const val = Number(data.rotateReceiver);
-      rotationDeg = (val === 180) ? 180 : 0;
-      applyBoxTransform();
-      log('rotateReceiver applied', { rotationDeg });
-    }
-  }
+  function applyConfig(data) { window.ReceiverConfig?.applyConfig?.(data); }
 
   function handleStroke(msg) {
     const phase = msg.phase;
@@ -333,7 +272,7 @@
     const loop = () => {
       if (frameVersion !== lastDrawnVersion && currentBitmap) {
         // Draw background then latest bitmap to base layer
-        try { drawBackground(); } catch(_) {}
+        try { window.ReceiverConfig?.drawBackground?.(base); } catch(_) {}
         const srcW = currentBitmap.width || currentBitmap.naturalWidth; const srcH = currentBitmap.height || currentBitmap.naturalHeight;
         base.save(); base.setTransform(1,0,0,1,0,0);
         base.drawImage(currentBitmap, 0, 0, srcW, srcH, 0, 0, baseCanvas.width, baseCanvas.height);
