@@ -1,8 +1,12 @@
 (() => {
   const SENDER_VERSION = '0.7.3';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
+  // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+  const ERASER_SCALE = 1.3;            // 消しゴムは常に+30%
+  const OTHER_BUFFER_MS = 200;         // 他者描画のスムージング遅延
+  const SEND_INTERVAL_MS = 150;        // PNG送信の間引き（通常OFF）
   const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
   const slog = (...a) => { if (SDEBUG) console.log('[sender]', ...a); };
 
@@ -35,7 +39,6 @@
   let ws = null;
   let wsReady = false;
   let lastSent = 0;
-  const SEND_INTERVAL_MS = 150; // throttle during drawing (unused if disabled)
   const SEND_FRAMES_DURING_DRAW = false; // 逐次描画は座標で行うため、描画中のフレーム送信は既定で無効化
   let httpFallback = false;
   let currentStrokeId = null;
@@ -64,7 +67,6 @@
   // 他者描画レイヤとスムージング
   const otherLayers = new Map(); // authorId -> {canvas, ctx}
   const otherStrokes = new Map(); // strokeId -> state
-  const OTHER_BUFFER_MS = 200;
 
   function getOtherLayer(author) {
     if (!otherLayers.has(author)) {
@@ -99,6 +101,11 @@
     ctx.drawImage(selfLayer.canvas, 0, 0);
     ctx.restore();
   }
+
+  // small helpers for self drawing
+  function selfCtx() { return selfLayer.ctx; }
+  function setCompositeForTool(c, erasing) { c.globalCompositeOperation = erasing ? 'destination-out' : 'source-over'; }
+  function setStrokeStyle(c) { c.lineJoin='round'; c.lineCap='round'; c.strokeStyle = brushColor; c.lineWidth = (eraserActive?ERASER_SCALE:1.0) * brushSizeCssPx * DPR; }
   function processOtherStrokes() {
     const now = performance.now();
     const target = now - OTHER_BUFFER_MS;
@@ -337,10 +344,8 @@
     points.push({ x, y });
 
     const n = points.length;
-    const tctx = selfLayer.ctx;
-    tctx.globalCompositeOperation = eraserActive ? 'destination-out' : 'source-over';
-    tctx.lineJoin = 'round'; tctx.lineCap = 'round';
-    tctx.strokeStyle = brushColor; tctx.lineWidth = (eraserActive ? 1.3 : 1.0) * brushSizeCssPx * DPR;
+    const tctx = selfCtx();
+    setCompositeForTool(tctx, eraserActive); setStrokeStyle(tctx);
     if (n === 2) {
       tctx.beginPath();
       tctx.moveTo(points[0].x, points[0].y);
@@ -383,12 +388,12 @@
     // 末端の処理（タップや短い線への対応）
     const n = points.length;
     if (n === 1) {
-      const tctx = selfLayer.ctx; tctx.beginPath(); tctx.fillStyle = brushColor; tctx.globalCompositeOperation = eraserActive?'destination-out':'source-over';
-      tctx.arc(points[0].x, points[0].y, ((eraserActive?1.3:1.0) * brushSizeCssPx * DPR) / 2, 0, Math.PI * 2); tctx.fill();
+      const tctx = selfCtx(); tctx.beginPath(); tctx.fillStyle = brushColor; setCompositeForTool(tctx, eraserActive);
+      tctx.arc(points[0].x, points[0].y, ((eraserActive?ERASER_SCALE:1.0) * brushSizeCssPx * DPR) / 2, 0, Math.PI * 2); tctx.fill();
     } else if (n >= 3) {
       const p0 = points[n - 3]; const p1 = points[n - 2]; const p2 = points[n - 1];
       const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-      const tctx = selfLayer.ctx; tctx.globalCompositeOperation = eraserActive?'destination-out':'source-over';
+      const tctx = selfCtx(); setCompositeForTool(tctx, eraserActive);
       tctx.beginPath(); tctx.moveTo(mPrev.x, mPrev.y); tctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); tctx.stroke();
     }
     points = [];
