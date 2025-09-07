@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.7.9';
+  const SENDER_VERSION = '0.8.0';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -248,7 +248,17 @@
     const pad = 24; // 余白
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);
-    const maxH = Math.max(300, window.innerHeight - toolbarH - pad);
+    let maxH = Math.max(300, window.innerHeight - toolbarH - pad);
+
+    // 狭幅（1カラム）ではツール群の高さも差し引いて、キャンバスとボタンを同一画面に収める
+    const isNarrow = window.matchMedia('(max-width: 900px)').matches;
+    if (isNarrow) {
+      const tools = document.querySelector('.side-tools');
+      const hint = document.querySelector('.hint');
+      const toolsH = (tools?.offsetHeight || 0);
+      const hintH = (hint?.offsetHeight || 0);
+      maxH = Math.max(200, maxH - toolsH - hintH - 8); // ちょい余白
+    }
 
     // 収まる最大幅（高さ制限からも算出）
     const widthFromH = Math.round(maxH * RATIO);

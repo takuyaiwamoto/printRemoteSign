@@ -44,7 +44,17 @@ export class CanvasManager {
     const pad = 24;
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);
-    const maxH = Math.max(300, window.innerHeight - toolbarH - pad);
+    let maxH = Math.max(300, window.innerHeight - toolbarH - pad);
+
+    // 狭幅（1カラム）ではツール群の高さも差し引いて、キャンバスとボタンを同一画面に収める
+    const isNarrow = window.matchMedia('(max-width: 900px)').matches;
+    if (isNarrow) {
+      const tools = document.querySelector('.side-tools');
+      const hint = document.querySelector('.hint');
+      const toolsH = (tools?.offsetHeight || 0);
+      const hintH = (hint?.offsetHeight || 0);
+      maxH = Math.max(200, maxH - toolsH - hintH - 8);
+    }
 
     // 高さ制限から導いた幅と、幅制限の小さい方を採用
     const widthFromH = Math.round(maxH * this.RATIO);
