@@ -3,6 +3,7 @@ export class CanvasManager {
   constructor(canvas, { ratio = 210 / 297, dpr = devicePixelRatio || 1 } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this.wrap = canvas.closest('.canvas-wrap') || document.getElementById('canvas-wrap') || canvas.parentElement;
     this.RATIO = ratio;
     this.DPR = Math.max(1, Math.min(dpr, 3));
 
@@ -44,12 +45,19 @@ export class CanvasManager {
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);
     const maxH = Math.max(300, window.innerHeight - toolbarH - pad);
-    let width, height;
-    if (maxW / maxH >= this.RATIO) { height = maxH; width = Math.round(height * this.RATIO); }
-    else { width = maxW; height = Math.round(width / this.RATIO); }
 
-    this.canvas.style.width = width + 'px';
-    this.canvas.style.height = height + 'px';
+    // 高さ制限から導いた幅と、幅制限の小さい方を採用
+    const widthFromH = Math.round(maxH * this.RATIO);
+    const targetW = Math.min(maxW, widthFromH);
+
+    // ラップは幅のみ指定（高さは aspect-ratio で決まる）
+    if (this.wrap && this.wrap.style) {
+      this.wrap.style.width = targetW + 'px';
+      this.wrap.style.height = '';
+    }
+    // 表示サイズは常にラップにフィット
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
 
     let prev = null;
     if (preserve && this.canvas.width && this.canvas.height) {
@@ -58,8 +66,9 @@ export class CanvasManager {
       prev.getContext('2d').drawImage(this.canvas, 0, 0);
     }
 
-    this.canvas.width = Math.floor(width * this.DPR);
-    this.canvas.height = Math.floor(height * this.DPR);
+    const rect = (this.wrap?.getBoundingClientRect?.() || this.canvas.getBoundingClientRect());
+    this.canvas.width = Math.floor(rect.width * this.DPR);
+    this.canvas.height = Math.floor(rect.height * this.DPR);
     this._applyBrush();
     const ctx = this.ctx;
     if (prev) {
