@@ -114,6 +114,35 @@
     fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {});
   }
 
+  // SSE fallback to receive others' strokes even if WS broadcast doesn't include senders
+  let es = null;
+  function connectSSE() {
+    if (!SERVER_URL || es) return;
+    const url = `${toHttpBase(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`;
+    try { es = new EventSource(url); } catch(_) { return; }
+    es.addEventListener('stroke', (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.authorId && msg.authorId === AUTHOR_ID) return;
+        if (!msg || msg.type !== 'stroke') return;
+        if (msg.phase === 'start') {
+          const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
+          const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
+          otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
+          const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
+          if (SDEBUG) slog('sse other start', { id: msg.id, author: msg.authorId });
+        } else if (msg.phase === 'point') {
+          const s = otherStrokes.get(msg.id); if (!s) return; const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() }; s.points.push(p);
+        } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; if (SDEBUG) slog('sse other end', { id: msg.id }); }
+      } catch(_) {}
+    });
+    es.addEventListener('clear', () => {
+      ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+      for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+      if (SDEBUG) slog('sse clear all');
+    });
+  }
+
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
@@ -163,6 +192,7 @@
     };
   }
   connectWS();
+  connectSSE();
 
   function sendFrame(force = false) {
     const dataURL = canvas.toDataURL('image/png');
