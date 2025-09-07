@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.15';
+  const RECEIVER_VERSION = '0.6.16';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -332,7 +332,11 @@
 
     // Step 1: after X sec, animate rotation to 180deg
     setTimeout(() => {
-      rotationDeg = 180; applyBoxTransform();
+      // animate relative +180deg to ensure visible flip from current state
+      const startDeg = rotationDeg || 0;
+      const endDeg = (startDeg + 180) % 360;
+      if (rotator) rotator.style.transition = `transform ${rotateDur}ms ease`;
+      rotationDeg = endDeg; applyBoxTransform();
       // Step 2: after rotation done + Z sec, move down out of view
       setTimeout(() => {
         const box = canvasBox;
@@ -353,19 +357,18 @@
     function afterMove(){
       // After 5s, clear drawings (receiver + senders) and reappear at top 80px with rotation 180
       setTimeout(() => {
-        // request global clear
-        try { net?.stop?.(); } catch(_) {}
+        // request global clear (senders + receivers)
         try {
-          // Trigger clear via ReceiverNet HTTP (best-effort); send WS via fetch fallback is not available here.
-          fetch(`${(window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER).replace(/^wss?:\/\//,'https://').replace(/\/$/,'')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
+          const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+            .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+          fetch(`${httpBase}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
         } catch(_) {}
+        // local clear + reset
         window.StrokeEngine?.clearAll?.(); clearCanvas();
-        // reset transforms
+        if (rotator) rotator.style.transition = '';
         if (canvasBox) canvasBox.style.transform = '';
         rotationDeg = 180; applyBoxTransform();
         animRunning = false;
-        // reconnect if we stopped it
-        try { location.reload(); } catch(_) {}
       }, 5000);
     }
     function finish(){ animRunning = false; }
