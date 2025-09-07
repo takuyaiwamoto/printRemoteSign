@@ -25,7 +25,7 @@
         position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
         width: min(100%, 1200px);
         height: calc(100vh - 80px);
-        display: grid; place-items: center;
+        display: block; /* 垂直中央配置をやめ、上端を80pxに固定 */
         pointer-events: none; /* 背景クリック防止。キャンバスはイベントを受ける */
       }
       .canvas-box {
