@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.8.0';
+  const SENDER_VERSION = '0.8.1';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -467,16 +467,33 @@
   function setActive(list, el) {
     list.forEach(b => { b.classList.toggle('active', b === el); b.setAttribute('aria-pressed', b === el ? 'true' : 'false'); });
   }
-  sizeBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.getAttribute('data-size');
+  if (sizeBtns.length === 1) {
+    // 単一ボタンで thin -> normal -> thick をトグル
+    const order = ['thin','normal','thick'];
+    let idx = 1; // 初期はnormal見た目
+    const btn = sizeBtns[0];
+    const stroke = btn.querySelector('.stroke');
+    function applyByKey(key){
       const val = Math.floor(SIZE_PRESETS[key] || brushSizeCssPx);
-      brushSizeCssPx = val;
-      ctx.lineWidth = brushSizeCssPx * DPR;
+      brushSizeCssPx = val; ctx.lineWidth = brushSizeCssPx * DPR;
       if (sizeInput) sizeInput.value = String(brushSizeCssPx);
-      setActive(sizeBtns, btn);
+      // 見た目（stroke-* クラスを切替）
+      if (stroke){ stroke.classList.remove('stroke-thin','stroke-normal','stroke-thick'); stroke.classList.add('stroke-' + key); }
+    }
+    btn.addEventListener('click', () => { idx = (idx + 1) % order.length; applyByKey(order[idx]); });
+    applyByKey(order[idx]);
+  } else {
+    sizeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-size');
+        const val = Math.floor(SIZE_PRESETS[key] || brushSizeCssPx);
+        brushSizeCssPx = val;
+        ctx.lineWidth = brushSizeCssPx * DPR;
+        if (sizeInput) sizeInput.value = String(brushSizeCssPx);
+        setActive(sizeBtns, btn);
+      });
     });
-  });
+  }
   colorBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const col = btn.getAttribute('data-color');

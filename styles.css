@@ -79,7 +79,7 @@ canvas {
   justify-items: center;
   grid-auto-rows: min-content;
 }
-.side-tools .actions { grid-column: 1 / -1; display: grid; grid-auto-flow: row; gap: 8px; justify-content: center; }
+.side-tools .actions { grid-column: 1 / -1; display: grid; grid-auto-flow: column; gap: 8px; justify-content: center; }
 .size-btn, .color-btn {
   appearance: none;
   width: 44px; height: 44px;
@@ -140,5 +140,5 @@ canvas {
     grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
   }
   .side-tools .group { grid-auto-flow: column; }
-  .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: row; }
+  .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: column; }
 }

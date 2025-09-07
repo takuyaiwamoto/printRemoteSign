@@ -17,15 +17,30 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
     list.forEach((b) => { const on = b === el; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
   }
 
-  sizeBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = btn.getAttribute('data-size');
+  if (sizeBtns.length === 1) {
+    const order = ['thin','normal','thick'];
+    let idx = 1;
+    const btn = sizeBtns[0];
+    const stroke = btn.querySelector('.stroke');
+    function applyByKey(key){
       const val = Math.floor(SIZE_PRESETS[key] || canvasManager.brushSizeCss);
       canvasManager.setBrushSize(val);
       if (sizeInput) sizeInput.value = String(canvasManager.brushSizeCss);
-      setActive(sizeBtns, btn);
+      if (stroke){ stroke.classList.remove('stroke-thin','stroke-normal','stroke-thick'); stroke.classList.add('stroke-' + key); }
+    }
+    btn.addEventListener('click', () => { idx = (idx + 1) % order.length; applyByKey(order[idx]); });
+    applyByKey(order[idx]);
+  } else {
+    sizeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-size');
+        const val = Math.floor(SIZE_PRESETS[key] || canvasManager.brushSizeCss);
+        canvasManager.setBrushSize(val);
+        if (sizeInput) sizeInput.value = String(canvasManager.brushSizeCss);
+        setActive(sizeBtns, btn);
+      });
     });
-  });
+  }
 
   colorBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
