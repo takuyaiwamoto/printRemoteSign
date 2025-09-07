@@ -66,15 +66,13 @@
   let bgMode = 'white';
   let bgImage = null; // ImageBitmap or HTMLImageElement
   const canvasBox = document.getElementById('canvasBox');
+  const transformer = document.getElementById('transformer');
   // Receiver-only transforms
   let rotationDeg = 180; // default: 180 per requirement
   let scalePct = 100;
   function applyBoxTransform() {
     const s = Math.max(0.01, (scalePct || 100) / 100);
-    if (!canvasBox) return;
-    const h = canvasBox.getBoundingClientRect?.().height || 0;
-    const ty = -0.5 * (1 - s) * h; // compensate scaling to keep visual top at wrapper top (origin is center)
-    canvasBox.style.transform = `translateY(${ty}px) rotate(${rotationDeg}deg) scale(${s})`;
+    if (transformer) transformer.style.transform = `rotate(${rotationDeg}deg) scale(${s})`;
   }
 
   // Realtime stroke rendering state
