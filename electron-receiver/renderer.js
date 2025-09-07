@@ -22,25 +22,7 @@
   const DEBUG = String(new URLSearchParams(location.search).get('debug') || window.DEBUG_RECEIVER || '') === '1';
   const log = (...a) => { if (DEBUG) console.log('[receiver]', ...a); };
 
-  function fitCanvas() {
-    if (!baseCanvas || !inkCanvas) return;
-    // Use layout sizes not affected by CSS transform scale
-    const parent = baseCanvas.parentElement;
-    let width = parent.offsetWidth;
-    let height = parent.offsetHeight;
-    if (!height) {
-      // Fallback to ratio if offsetHeight is 0 (older Electron)
-      height = Math.round(width / RATIO);
-    }
-    for (const c of [baseCanvas, inkCanvas]) {
-      c.style.width = width + 'px';
-      c.style.height = height + 'px';
-      c.width = Math.floor(width * DPR);
-      c.height = Math.floor(height * DPR);
-    }
-    if (base) { base.imageSmoothingEnabled = true; base.imageSmoothingQuality = 'high'; }
-    if (ink) { ink.imageSmoothingEnabled = true; ink.imageSmoothingQuality = 'high'; }
-  }
+  function fitCanvas() { window.CanvasLayout?.fitCanvas?.(baseCanvas, inkCanvas, DPR, RATIO); }
 
   // (moved) Resize handler and initial fit are set after transform vars are declared
 
@@ -62,52 +44,25 @@
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
   let bgMode = 'white';
   let bgImage = null; // ImageBitmap or HTMLImageElement
-  const canvasBox = document.getElementById('canvasBox');
-  const scaler = document.getElementById('scaler');
-  const rotator = document.getElementById('rotator');
+  const { canvasBox, scaler, rotator } = (window.CanvasLayout?.getElements?.() || {
+    canvasBox: document.getElementById('canvasBox'),
+    scaler: document.getElementById('scaler'),
+    rotator: document.getElementById('rotator'),
+  });
   // Receiver-only transforms
   let rotationDeg = 180; // default: 180 per requirement
   let scalePct = 100;
   function applyBoxTransform() {
-    const s = Math.max(0.01, (scalePct || 100) / 100);
-    if (scaler) scaler.style.transform = `scale(${s})`;
-    if (rotator) rotator.style.transform = `rotate(${rotationDeg}deg)`;
-    // Fallback: apply to canvasBox directly if wrappers missing
-    if (!scaler && canvasBox) canvasBox.style.transform = `scale(${s})`;
-    if (!rotator && canvasBox) canvasBox.style.transform += ` rotate(${rotationDeg}deg)`;
+    window.CanvasLayout?.applyTransform?.({ scalePct, rotationDeg, elements: { canvasBox, scaler, rotator } });
   }
 
   // Now that transform vars are defined, wire resize and do initial fit
   window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
   fitCanvas(); applyBoxTransform();
 
-  // Realtime stroke rendering state
-  const strokes = new Map(); // id -> { author, color, sizeCss, sizeDev, points: [{x,y,time}], drawnUntil: number, ended: boolean }
-  const authorLayers = new Map(); // authorId -> {canvas, ctx}
-  const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
+  // Realtime stroke rendering state (moved to StrokeEngine)
   const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 200))));
-
-  function getAuthorLayer(author) {
-    const key = String(author || 'anon');
-    if (!authorLayers.has(key)) {
-      const c = document.createElement('canvas');
-      c.width = baseCanvas.width; c.height = baseCanvas.height;
-      const k = c.getContext('2d');
-      k.imageSmoothingEnabled = true; k.imageSmoothingQuality = 'high';
-      authorLayers.set(key, { canvas: c, ctx: k });
-    }
-    return authorLayers.get(key);
-  }
-
-  function resizeAuthorLayers() {
-    for (const [key, layer] of authorLayers) {
-      const off = document.createElement('canvas'); off.width = baseCanvas.width; off.height = baseCanvas.height;
-      off.getContext('2d').drawImage(layer.canvas, 0, 0, layer.canvas.width, layer.canvas.height, 0, 0, off.width, off.height);
-      layer.canvas.width = off.width; layer.canvas.height = off.height;
-      layer.ctx = layer.canvas.getContext('2d'); layer.ctx.imageSmoothingEnabled = true; layer.ctx.imageSmoothingQuality = 'high';
-      layer.ctx.drawImage(off, 0, 0);
-    }
-  }
+  window.StrokeEngine?.init?.({ dpr: DPR, base: baseCanvas, ink: inkCanvas, bufferMs: STROKE_BUFFER_MS });
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
@@ -152,20 +107,9 @@
         if (!ignoreFrames) ingestFrame(msg.data);
         return;
       }
-      if (msg.type === 'clear') {
-        // 背景は維持し、全レイヤのみクリア
-        for (const { canvas, ctx } of authorLayers.values()) {
-          ctx.clearRect(0,0,canvas.width,canvas.height);
-        }
-        strokes.clear();
-        clearCanvas();
-        return;
-      }
+      if (msg.type === 'clear') { window.StrokeEngine?.clearAll?.(); clearCanvas(); return; }
       if (msg.type === 'config' && msg.data) { applyConfig(msg.data); return; }
-      if (msg.type === 'stroke') {
-        handleStroke(msg);
-        return;
-      }
+      if (msg.type === 'stroke') { if (msg.phase==='start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(msg); return; }
     };
   }
 
@@ -206,9 +150,7 @@
     es.addEventListener('frame', (ev) => {
       try { const j = JSON.parse(ev.data); if (j && j.data) ingestFrame(j.data); } catch (_) {}
     });
-    es.addEventListener('stroke', (ev) => {
-      try { handleStroke(JSON.parse(ev.data)); } catch (_) {}
-    });
+    es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); if (m && m.phase==='start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(m); } catch (_) {} });
     es.addEventListener('clear', () => { clearCanvas(); strokes.clear(); });
     es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) applyConfig(j.data); } catch (_) {} });
     es.onerror = () => { /* will auto-retry; keep http polling too */ };
@@ -232,9 +174,7 @@
   }
   function stopConfigPolling() { if (configPollTimer) { clearInterval(configPollTimer); configPollTimer = null; } }
 
-  function normToCanvas(nx, ny) {
-    return { x: nx * baseCanvas.width, y: ny * baseCanvas.height };
-  }
+  function normToCanvas(nx, ny) { return { x: nx * baseCanvas.width, y: ny * baseCanvas.height }; }
 
   function clearCanvas() {
     if (!base || !ink) return;
@@ -245,7 +185,7 @@
     ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
     ink.restore();
     // composite all author layers
-    ink.save(); ink.setTransform(1,0,0,1,0,0); for (const {canvas} of authorLayers.values()) ink.drawImage(canvas,0,0); ink.restore();
+    ink.save(); ink.setTransform(1,0,0,1,0,0); window.StrokeEngine?.compositeTo?.(ink); ink.restore();
   }
 
   function drawBackground() {
@@ -516,9 +456,9 @@
         lastDrawnVersion = frameVersion;
       }
       // Always process stroke queues toward target time, then composite author layers to ink
-      processStrokes();
+      window.StrokeEngine?.process?.();
       ink.save(); ink.setTransform(1,0,0,1,0,0); ink.clearRect(0,0,inkCanvas.width, inkCanvas.height);
-      for (const {canvas} of authorLayers.values()) ink.drawImage(canvas,0,0);
+      window.StrokeEngine?.compositeTo?.(ink);
       ink.restore();
       requestAnimationFrame(loop);
     };
