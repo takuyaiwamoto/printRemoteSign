@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.7.3';
+  const SENDER_VERSION = '0.7.4';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -242,29 +242,24 @@
     }
   }
 
-  // 画面に収まる最大サイズで A4 縦比率を維持してラップ要素とキャンバスをリサイズ
+  // 画面に収まる最大サイズで A4 縦比率を維持してラップ要素の幅のみ制御
+  // 高さは CSS の aspect-ratio で自動決定し、その実サイズからキャンバス解像度を設定
   function fitToViewport(preserve = false) {
     const pad = 24; // 余白
     const toolbarH = (document.querySelector('.toolbar')?.offsetHeight || 60) + pad;
     const maxW = Math.max(300, window.innerWidth - pad * 2);
     const maxH = Math.max(300, window.innerHeight - toolbarH - pad);
 
-    // ビューポートに収まる幅・高さを算出
-    let width, height;
-    if (maxW / maxH >= RATIO) {
-      height = maxH;
-      width = Math.round(height * RATIO);
-    } else {
-      width = maxW;
-      height = Math.round(width / RATIO);
-    }
+    // 収まる最大幅（高さ制限からも算出）
+    const widthFromH = Math.round(maxH * RATIO);
+    const targetW = Math.min(maxW, widthFromH);
 
-    wrap.style.width = width + 'px';
-    wrap.style.height = height + 'px';
-
-    // キャンバスの表示サイズ（CSSピクセル）
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
+    // ラップは幅のみ指定（高さは aspect-ratio で決まる）
+    wrap.style.width = targetW + 'px';
+    wrap.style.height = '';
+    // キャンバス表示サイズは常にラップにフィット
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
 
     // 既存描画を保持する場合はオフスクリーンに退避してから再設定
     let prev = null;
@@ -275,9 +270,10 @@
       prev.getContext('2d').drawImage(canvas, 0, 0);
     }
 
-    // 実際の描画解像度は DPR を掛ける
-    const pixelW = Math.floor(width * DPR);
-    const pixelH = Math.floor(height * DPR);
+    // 実際の描画解像度はラップの実サイズに基づき DPR を掛ける
+    const rect = wrap.getBoundingClientRect();
+    const pixelW = Math.floor(rect.width * DPR);
+    const pixelH = Math.floor(rect.height * DPR);
     canvas.width = pixelW;
     canvas.height = pixelH;
 

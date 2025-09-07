@@ -1,7 +1,7 @@
 import http from 'http';
 import express from 'express';
 import { WebSocketServer } from 'ws';
-const RELAY_VERSION = '0.6.1';
+const RELAY_VERSION = '0.6.2';
 
 const app = express();
 // Lightweight CORS + JSON body for HTTP fallback

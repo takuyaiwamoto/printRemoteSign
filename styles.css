@@ -48,6 +48,7 @@ body {
 .canvas-wrap {
   width: 100%;
   max-width: 1000px; /* 上限（任意） */
+  aspect-ratio: 210 / 297; /* A4縦の比率を常に維持 */
   background: #fff;
   box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
   border-radius: 8px;
@@ -58,7 +59,7 @@ body {
 canvas {
   display: block;
   width: 100%;
-  height: auto; /* 実寸は JS で上書きする */
+  height: 100%; /* ラップのアスペクト比に追従して常に等倍スケール */
   touch-action: none; /* タッチ操作のパン/ズームを無効化 */
 }
 
