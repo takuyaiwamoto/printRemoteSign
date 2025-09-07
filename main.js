@@ -525,5 +525,6 @@
 
   // 初期化 & リサイズ（内容保持）
   fitToViewport(false);
+  resizeOtherLayers(); composeOthers();
   window.addEventListener('resize', () => { fitToViewport(true); resizeOtherLayers(); composeOthers(); });
 })();
