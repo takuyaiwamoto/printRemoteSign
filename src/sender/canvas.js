@@ -99,10 +99,17 @@ export class CanvasManager {
   }
 
   _pos(e) {
+    if (typeof e.offsetX === 'number' && typeof e.offsetY === 'number') {
+      const nx = this.canvas.clientWidth ? (e.offsetX / this.canvas.clientWidth) : 0;
+      const ny = this.canvas.clientHeight ? (e.offsetY / this.canvas.clientHeight) : 0;
+      return { x: nx * this.canvas.width, y: ny * this.canvas.height };
+    }
     const rect = this.canvas.getBoundingClientRect();
-    const xCss = (e.clientX ?? (e.touches?.[0]?.clientX || 0)) - rect.left;
-    const yCss = (e.clientY ?? (e.touches?.[0]?.clientY || 0)) - rect.top;
-    return { x: xCss * this.DPR, y: yCss * this.DPR };
+    const cx = (e.clientX ?? (e.touches?.[0]?.clientX || 0));
+    const cy = (e.clientY ?? (e.touches?.[0]?.clientY || 0));
+    const nx = rect.width ? (cx - rect.left) / rect.width : 0;
+    const ny = rect.height ? (cy - rect.top) / rect.height : 0;
+    return { x: nx * this.canvas.width, y: ny * this.canvas.height };
   }
 
   _start(e) {

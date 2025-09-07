@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.7.5';
+  const SENDER_VERSION = '0.7.6';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -298,15 +298,19 @@
   }
 
   function getPos(e) {
-    // DPR変動の影響を受けないよう、常に正規化→実キャンバス座標へ変換
+    // 可能なら offsetX/Y（PointerEvent計算済み）を使用
+    if (typeof e.offsetX === 'number' && typeof e.offsetY === 'number') {
+      const nx = (canvas.clientWidth > 0) ? (e.offsetX / canvas.clientWidth) : 0;
+      const ny = (canvas.clientHeight > 0) ? (e.offsetY / canvas.clientHeight) : 0;
+      return { x: nx * canvas.width, y: ny * canvas.height };
+    }
+    // フォールバック: rect基準
     const rect = canvas.getBoundingClientRect();
-    const xCss = (e.clientX ?? (e.touches?.[0]?.clientX || 0)) - rect.left;
-    const yCss = (e.clientY ?? (e.touches?.[0]?.clientY || 0)) - rect.top;
-    const nx = (rect.width > 0) ? (xCss / rect.width) : 0;
-    const ny = (rect.height > 0) ? (yCss / rect.height) : 0;
-    const x = nx * canvas.width;
-    const y = ny * canvas.height;
-    return { x, y };
+    const cx = (e.clientX ?? (e.touches?.[0]?.clientX || 0));
+    const cy = (e.clientY ?? (e.touches?.[0]?.clientY || 0));
+    const nx = rect.width ? (cx - rect.left) / rect.width : 0;
+    const ny = rect.height ? (cy - rect.top) / rect.height : 0;
+    return { x: nx * canvas.width, y: ny * canvas.height };
   }
 
   function startDraw(e) {
