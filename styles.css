@@ -66,8 +66,9 @@ canvas {
 .side-tools {
   align-self: stretch;
   display: grid;
-  grid-auto-flow: column; /* 太さと色を横並びの縦列に */
-  gap: 8px; /* 列間も少し詰める */
+  grid-auto-flow: row; /* 上から: 太さ/色 → 操作 */
+  grid-template-columns: repeat(2, auto); /* 左:太さ 右:色 */
+  gap: 8px; /* 行/列の隙間 */
   justify-self: start; /* キャンバス側へ寄せる */
   align-items: start; /* 縦方向で余白を作らない */
 }
@@ -78,6 +79,7 @@ canvas {
   justify-items: center;
   grid-auto-rows: min-content;
 }
+.side-tools .actions { grid-column: 1 / -1; display: grid; grid-auto-flow: row; gap: 8px; justify-content: center; }
 .size-btn, .color-btn {
   appearance: none;
   width: 44px; height: 44px;
@@ -134,4 +136,5 @@ canvas {
   .stage { grid-template-columns: 1fr; }
   .side-tools { justify-self: center; grid-auto-flow: row; grid-template-columns: repeat(5, 44px); }
   .side-tools .group { grid-auto-flow: column; }
+  .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: row; }
 }
