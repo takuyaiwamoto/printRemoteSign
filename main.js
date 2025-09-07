@@ -21,6 +21,7 @@
   const saveBtn = document.getElementById('save');
   const clearAllBtn = document.getElementById('btn-clear-all');
   const eraserBtn = document.getElementById('btn-eraser');
+  const sendBtn = document.getElementById('btn-send');
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearSideBtn = document.getElementById('btn-clear');
@@ -490,6 +491,25 @@
       fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   })());
+
+  // ---- Send animation trigger (broadcast to receivers) ----
+  sendBtn?.addEventListener('click', () => {
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
+    } else if (httpFallback && SERVER_URL) {
+      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      fetch(`${httpBase.replace(/\/$/, '')}/anim?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+    }
+    // Also send as config (for older server compatibility)
+    try {
+      const data = { type:'config', data:{ animKick: Date.now() } };
+      if (wsReady) ws.send(JSON.stringify(data));
+      else if (httpFallback && SERVER_URL) {
+        const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+        fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: data.data }) }).catch(()=>{});
+      }
+    } catch(_) {}
+  });
 
   eraserBtn?.addEventListener('click', () => {
     eraserActive = !eraserActive;

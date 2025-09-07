@@ -53,6 +53,7 @@
     base: baseCanvas,
     onScaleCb: (v) => { scalePct = v; applyBoxTransform(); log('scaleReceiver applied', { v, factor: v/100 }); },
     onRotateCb: (deg) => { rotationDeg = deg === 180 ? 180 : 0; applyBoxTransform(); log('rotateReceiver applied', { rotationDeg }); },
+    onKickCb: () => { tryStartSendAnimation(); },
     logCb: (...a) => log(...a)
   });
 

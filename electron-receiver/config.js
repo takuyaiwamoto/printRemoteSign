@@ -5,13 +5,15 @@
   let onScale = null;
   let onRotate = null;
   let log = () => {};
+  let onKick = null;
   let animRotateDelaySec = 0;
   let animMoveDelaySec = 0;
 
-  function init({ base, onScaleCb, onRotateCb, logCb }) {
+  function init({ base, onScaleCb, onRotateCb, onKickCb, logCb }) {
     baseCanvas = base;
     onScale = onScaleCb || (() => {});
     onRotate = onRotateCb || (() => {});
+    onKick = onKickCb || (() => {});
     log = logCb || (() => {});
   }
 
@@ -77,6 +79,7 @@
       if (isFinite(z)) animMoveDelaySec = Math.max(0, Math.min(10, Math.round(z)));
       log('anim config', { animRotateDelaySec, animMoveDelaySec });
     }
+    if (typeof data.animKick !== 'undefined') { try { onKick && onKick(); } catch(_) {} }
   }
 
   function getAnimDelays() { return { rotateDelaySec: animRotateDelaySec, moveDelaySec: animMoveDelaySec }; }

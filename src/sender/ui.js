@@ -78,6 +78,10 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
     try {
       if (transport?.wsSend && transport.wsReady) transport.wsSend({ type: 'sendAnimation' });
       else transport?.httpPost?.('/anim', {});
+      // Also broadcast via config (compatible with older servers)
+      const kick = { type: 'config', data: { animKick: Date.now() } };
+      if (transport?.wsSend && transport.wsReady) transport.wsSend(kick);
+      else transport?.httpPost?.('/config', kick);
     } catch(_) {}
   });
 
