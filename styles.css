@@ -136,10 +136,10 @@ canvas {
 @media (max-width: 900px) {
   .stage { grid-template-columns: 1fr; }
   .side-tools {
-    justify-self: center; /* 下段では中央寄せに */
-    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
-    max-width: 520px; /* ボタン群の最大幅を制限して中央に集約 */
-    justify-items: center;
+    justify-self: start; /* キャンバス左端に合わせる */
+    grid-template-columns: auto auto; /* 左:太さ 右:色 を同一行に */
+    justify-items: start;
+    width: var(--tools-width, auto); /* JSでキャンバス幅と同期 */
   }
   .side-tools .group { grid-auto-flow: column; }
   .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: column; }

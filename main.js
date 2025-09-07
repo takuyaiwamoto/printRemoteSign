@@ -1,5 +1,5 @@
 (() => {
-  const SENDER_VERSION = '0.8.3';
+  const SENDER_VERSION = '0.8.4';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
@@ -270,6 +270,14 @@
     // キャンバス表示サイズは常にラップにフィット
     canvas.style.width = '100%';
     canvas.style.height = '100%';
+
+    // 狭幅のとき、ツール行の幅をキャンバス幅に合わせる（左端を揃える）
+    try {
+      const tools = document.querySelector('.side-tools');
+      const narrow = window.matchMedia('(max-width: 900px)').matches;
+      if (tools) tools.style.setProperty('--tools-width', narrow ? (targetW + 'px') : 'auto');
+      if (tools && !narrow) tools.style.removeProperty('--tools-width');
+    } catch(_) {}
 
     // 既存描画を保持する場合はオフスクリーンに退避してから再設定
     let prev = null;
