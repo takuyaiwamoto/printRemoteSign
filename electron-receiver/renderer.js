@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.10';
+  const RECEIVER_VERSION = '0.6.11';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -70,8 +70,11 @@
   let rotationDeg = 180; // default: 180 per requirement
   let scalePct = 100;
   function applyBoxTransform() {
-    const factor = Math.max(0.01, (scalePct || 100) / 100);
-    if (canvasBox) canvasBox.style.transform = `rotate(${rotationDeg}deg) scale(${factor})`;
+    const s = Math.max(0.01, (scalePct || 100) / 100);
+    if (!canvasBox) return;
+    const h = canvasBox.getBoundingClientRect?.().height || 0;
+    const ty = -0.5 * (1 - s) * h; // compensate scaling to keep visual top at wrapper top (origin is center)
+    canvasBox.style.transform = `translateY(${ty}px) rotate(${rotationDeg}deg) scale(${s})`;
   }
 
   // Realtime stroke rendering state
