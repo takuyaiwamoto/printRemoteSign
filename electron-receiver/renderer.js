@@ -1,5 +1,5 @@
 (() => {
-  const RECEIVER_VERSION = '0.6.23';
+  const RECEIVER_VERSION = '0.6.26';
   const params = new URLSearchParams(location.search);
   const SERVER = params.get('server') || 'ws://localhost:8787';
   const CHANNEL = params.get('channel') || 'default';
@@ -314,7 +314,7 @@
     },
     onConfig: (d) => applyConfig(d),
     // Animation trigger from senders
-    onAction: (type) => { if (type === 'sendAnimation') tryStartSendAnimation(); },
+    onAction: (type) => { if (type === 'sendAnimation') tryStartAnimation(); },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
     log: (...a) => log(...a)
@@ -323,7 +323,13 @@
 
   // ---- Send animation handling ----
   let animRunning = false;
-  function tryStartSendAnimation(){
+  function tryStartAnimation(){
+    const t = (window.ReceiverConfig?.getAnimType?.() || 'A').toUpperCase();
+    if (t === 'B') return tryStartAnimB();
+    return tryStartAnimA();
+  }
+
+  function tryStartAnimA(){
     if (animRunning) { try { console.log('[receiver] anim already running'); } catch(_) {}; return; }
     animRunning = true; try { console.log('[receiver] anim start'); } catch(_) {}
     const delays = window.ReceiverConfig?.getAnimDelays?.() || { rotateDelaySec:0, moveDelaySec:0 };
@@ -348,7 +354,7 @@
         const box = canvasBox;
         if (!box) { finish(); return; }
         // Emit confetti right when moving starts (shorter window)
-        try { startConfetti(700); } catch(_) {}
+        try { startConfetti(1700); } catch(_) {}
         // animate translateY to push canvas below the window height
         const start = performance.now();
         const from = 0; const to = (window.innerHeight || 2000);
@@ -380,6 +386,13 @@
       }, 5000);
     }
     function finish(){ animRunning = false; }
+  }
+
+  // Placeholder for Animation B (to be specified later): simple confetti burst only
+  function tryStartAnimB(){
+    if (animRunning) return; animRunning = true;
+    try { startConfetti(2000); } catch(_) {}
+    setTimeout(()=>{ animRunning = false; }, 2500);
   }
 
   // ---- Fireworks overlay (window-wide, 2D canvas) ----
@@ -461,7 +474,7 @@
 
   // ---- Confetti burst from bottom corners (pre-move) ----
   let cfRunning = false;
-function startConfetti(spawnWindowMs = 700) {
+function startConfetti(spawnWindowMs = 1700) {
     if (cfRunning) return; cfRunning = true;
     const cv = document.createElement('canvas');
     cv.style.position = 'fixed'; cv.style.inset = '0'; cv.style.zIndex = '9999';
@@ -477,22 +490,26 @@ function startConfetti(spawnWindowMs = 700) {
     const now = () => performance.now();
     const t0 = now();
     // クラッカー感: 少し強めの重力、発生間隔を遅め
-    const GR = 0.14 * DPR;
+    const GR = 0.10 * DPR;
     const spawnEvery = 100; // ms
     let lastSpawn = t0;
     function spawnSide(side){
       const W=cv.width, H=cv.height; const y = H - 4*DPR; const x = side==='left' ? 6*DPR : W - 6*DPR;
-      const count = 6; // 量を半分に
+      const count = 8; // 量を少し増やす
       for (let i=0;i<count;i++){
         // 目標は高さ40%付近（中央やや上）
-        const targetX = W*0.5 + (Math.random()-0.5)*0.14*W;
-        const targetY = H*0.40 + (Math.random()-0.5)*0.06*H;
+        const targetX = W*0.5 + (Math.random()-0.5)*0.24*W; // さらに横の広がり
+        const targetY = H*0.35 + (Math.random()-0.5)*0.10*H; // 少し低め＆縦の広がり増
         const dx = targetX - x, dy = targetY - y;
         const len = Math.max(1, Math.hypot(dx,dy));
         const ux = dx/len, uy = dy/len; // unit vector toward target
-        const base = (1.8 + Math.random()*0.6) * DPR * 1.8; // 勢い控えめ
-        const jx = (Math.random()-0.5)*0.22, jy = (Math.random()-0.5)*0.08; // ジッタ小さめ
-        const vx = (ux + jx) * base; const vy = (uy + jy) * base; // uy negative (upward)
+        // 初速を強化し、必ず目標（40%付近）に届くようにvyを補正
+        const base = (1.9 + Math.random()*0.8) * DPR * 2.0; // 初速をわずかに低減
+        const jx = (Math.random()-0.5)*0.36, jy = (Math.random()-0.5)*0.14; // さらに広げる
+        const vx0 = (ux + jx) * base; let vy0 = (uy + jy) * base; // uy negative
+        const needVy = -Math.sqrt(Math.max(0.1, 2 * GR * Math.max(5*DPR, (y - targetY))));
+        if (vy0 > needVy) vy0 = needVy * (1 + Math.random()*0.05); // 余裕は5%
+        const vx = vx0, vy = vy0;
         const isGlitter = Math.random() < 0.30; // 30% glitter（金/銀多め）
         const shape = isGlitter ? 'star' : (Math.random()<0.5 ? 'tri' : 'rect');
         parts.push({ x, y, vx, vy, life: 800 + (Math.random()*400|0), w: 6*DPR, h: 9*DPR, ang: Math.random()*Math.PI, angV:(Math.random()*2-1)*0.14, color: colors[(Math.random()*colors.length)|0], gl: isGlitter, seed: Math.random()*1000, shape });

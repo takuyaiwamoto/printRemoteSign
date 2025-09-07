@@ -8,6 +8,7 @@
   let onKick = null;
   let animRotateDelaySec = 0;
   let animMoveDelaySec = 0;
+  let animType = 'A';
 
   function init({ base, onScaleCb, onRotateCb, onKickCb, logCb }) {
     baseCanvas = base;
@@ -15,6 +16,8 @@
     onRotate = onRotateCb || (() => {});
     onKick = onKickCb || (() => {});
     log = logCb || (() => {});
+    // default animType if not set
+    if (!animType) animType = 'A';
   }
 
   function drawBackground(ctx) {
@@ -79,10 +82,15 @@
       if (isFinite(z)) animMoveDelaySec = Math.max(0, Math.min(10, Math.round(z)));
       log('anim config', { animRotateDelaySec, animMoveDelaySec });
     }
+    if (typeof data.animType === 'string') {
+      animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
+      log('anim type', animType);
+    }
     if (typeof data.animKick !== 'undefined') { try { onKick && onKick(); } catch(_) {} }
   }
 
   function getAnimDelays() { return { rotateDelaySec: animRotateDelaySec, moveDelaySec: animMoveDelaySec }; }
+  function getAnimType() { return animType; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType };
 })();

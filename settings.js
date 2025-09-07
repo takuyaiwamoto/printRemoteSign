@@ -71,6 +71,15 @@
   document.querySelectorAll('.card').forEach(card => {
     card.addEventListener('click', () => {
       const target = card.getAttribute('data-target');
+      if (target === 'animType') {
+        const anim = (card.getAttribute('data-anim') || 'A').toUpperCase();
+        const data = { animType: (anim === 'B') ? 'B' : 'A' };
+        const msg = { type: 'config', data };
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+        fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+          { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+        return;
+      }
       if (target === 'rotate') {
         const rot = Number(card.getAttribute('data-rot') || '0');
         const data = { rotateReceiver: (rot === 180) ? 180 : 0 };
