@@ -11,6 +11,7 @@
     let CHANNEL = (channel || 'default').trim();
     let ws = null;
     let reconnectTimer = null;
+    let wsOpen = false;
     let httpPollTimer = null;
     let es = null; // EventSource
     let configPollTimer = null;
@@ -44,15 +45,25 @@
     }
     function stopSSE() { if (es) { try { es.close(); } catch(_) {}; es = null; } }
 
-    function startConfigPolling() {
+    // Config polling with backoff; disabled while WS is open
+    let configDelay = 2000;
+    function scheduleConfigPoll() {
       if (configPollTimer) return;
-      const httpBase = toHttpBase(SERVER);
-      const url = `${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`;
-      const tick = async () => { try { const r = await fetch(url, { cache:'no-store' }); if (r.ok) { const j = await r.json(); if (j && typeof j==='object') onConfig && onConfig(j); } } catch(_) {} };
-      configPollTimer = setInterval(tick, 2000);
-      tick();
+      configPollTimer = setTimeout(async () => {
+        configPollTimer = null;
+        if (wsOpen) { configDelay = 2000; return; }
+        const httpBase = toHttpBase(SERVER);
+        const url = `${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`;
+        try {
+          const r = await fetch(url, { cache: 'no-store' });
+          if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') onConfig && onConfig(j); configDelay = 2000; }
+          else { configDelay = Math.min(15000, Math.round(configDelay * 1.7)); }
+        } catch(_) { configDelay = Math.min(15000, Math.round(configDelay * 1.7)); }
+        scheduleConfigPoll();
+      }, configDelay);
     }
-    function stopConfigPolling() { if (configPollTimer) { clearInterval(configPollTimer); configPollTimer = null; } }
+    function startConfigPolling() { if (!wsOpen) scheduleConfigPoll(); }
+    function stopConfigPolling() { if (configPollTimer) { clearTimeout(configPollTimer); configPollTimer = null; } configDelay = 2000; }
 
     function connect() {
       const url = `${toWsBase(SERVER)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
@@ -60,13 +71,14 @@
       ws.binaryType = 'arraybuffer';
       setStatus && setStatus('接続中…');
 
-      ws.onopen = () => { setStatus && setStatus('受信待機'); stopHttpPolling(); stopSSE(); startConfigPolling(); };
+      ws.onopen = () => { wsOpen = true; setStatus && setStatus('受信待機'); stopHttpPolling(); stopSSE(); stopConfigPolling(); };
       ws.onclose = () => {
+        wsOpen = false;
         setStatus && setStatus('切断、再接続待ち…');
         if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 1000);
         startHttpPolling(); startConfigPolling(); startSSE();
       };
-      ws.onerror = () => { setStatus && setStatus('通信エラー'); startHttpPolling(); startSSE(); startConfigPolling(); };
+      ws.onerror = () => { wsOpen = false; setStatus && setStatus('通信エラー'); startHttpPolling(); startSSE(); startConfigPolling(); };
       ws.onmessage = (ev) => {
         let msg = null; try { msg = typeof ev.data === 'string' ? JSON.parse(ev.data) : null; } catch(_) {}
         if (!msg || typeof msg !== 'object') return;
