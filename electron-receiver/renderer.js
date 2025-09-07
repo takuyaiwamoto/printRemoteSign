@@ -43,9 +43,9 @@
   }
 
   // Resize -> reflow canvases then repaint background
-  window.addEventListener('resize', () => { log('resize'); fitCanvas(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
+  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); drawBackground(); } catch(e) { log('drawBackground error on resize', e); } });
   // Initial size
-  fitCanvas();
+  fitCanvas(); applyBoxTransform();
 
   let ws;
   let reconnectTimer = null;
@@ -66,13 +66,15 @@
   let bgMode = 'white';
   let bgImage = null; // ImageBitmap or HTMLImageElement
   const canvasBox = document.getElementById('canvasBox');
-  const transformer = document.getElementById('transformer');
+  const scaler = document.getElementById('scaler');
+  const rotator = document.getElementById('rotator');
   // Receiver-only transforms
   let rotationDeg = 180; // default: 180 per requirement
   let scalePct = 100;
   function applyBoxTransform() {
     const s = Math.max(0.01, (scalePct || 100) / 100);
-    if (transformer) transformer.style.transform = `rotate(${rotationDeg}deg) scale(${s})`;
+    if (scaler) scaler.style.transform = `scale(${s})`;
+    if (rotator) rotator.style.transform = `rotate(${rotationDeg}deg)`;
   }
 
   // Realtime stroke rendering state
