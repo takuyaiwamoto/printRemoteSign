@@ -3,6 +3,8 @@
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   const RATIO = 210 / 297; // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+  const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
+  const slog = (...a) => { if (SDEBUG) console.log('[sender]', ...a); };
 
   const wrap = document.getElementById('canvas-wrap');
   const canvas = document.getElementById('paint');
@@ -114,13 +116,15 @@
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
-    try { ws = new WebSocket(url); } catch (_) { httpFallback = !!SERVER_URL; return; }
-    ws.onopen = () => { wsReady = true; httpFallback = false; /* 首描画のためのフレーム送信は不要 */ };
-    ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1000); };
-    ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; };
+    slog('ws connecting', { url });
+    try { ws = new WebSocket(url); } catch (e) { httpFallback = !!SERVER_URL; slog('ws construct error', e?.message||e); return; }
+    ws.onopen = () => { wsReady = true; httpFallback = false; slog('ws open'); /* 首描画のためのフレーム送信は不要 */ };
+    ws.onclose = () => { wsReady = false; slog('ws close'); setTimeout(connectWS, 1000); };
+    ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; slog('ws error'); };
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null');
+        if (msg && msg.type) slog('ws message', msg.type);
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
           if (typeof msg.data.bgSender === 'string') {
             ctx.save(); ctx.setTransform(1,0,0,1,0,0);
@@ -139,6 +143,7 @@
             const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
             otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
             const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y,sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
+            slog('other start', { id: msg.id, author: msg.authorId });
           } else if (msg.phase === 'point') {
             const s = otherStrokes.get(msg.id); if (!s) return; const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() }; s.points.push(p);
           } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; }
@@ -146,10 +151,12 @@
         if (msg && msg.type === 'clear') {
           ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
           for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
+          slog('clear all received');
         }
         if (msg && msg.type === 'clearMine') {
           const lay = otherLayers.get(String(msg.authorId)); if (lay) { lay.ctx.clearRect(0,0,lay.canvas.width, lay.canvas.height); composeOthers(); }
           if (msg.authorId === AUTHOR_ID) { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); }
+          slog('clear mine received', msg.authorId);
         }
       } catch(_) {}
     };
@@ -252,8 +259,10 @@
       const sizeN = brushSizeCssPx / cssW; // キャンバス幅に対する相対太さ
       if (wsReady) {
         try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID })); } catch (_) {}
+        slog('send start', { id, author: AUTHOR_ID, nx, ny, size: brushSizeCssPx, sizeN });
       } else {
         postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID });
+        slog('queue start(HTTP)', { id, author: AUTHOR_ID });
       }
       realtimeEverUsed = true;
     }
@@ -298,6 +307,7 @@
       const nx = x / canvas.width, ny = y / canvas.height;
       if (wsReady) {
         try { ws.send(JSON.stringify({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID })); } catch (_) {}
+        if (SDEBUG && (points.length % 10 === 0)) slog('send point', { id: currentStrokeId, nx, ny });
       } else {
         queuePoint({ type: 'stroke', phase: 'point', id: currentStrokeId, nx, ny, authorId: AUTHOR_ID });
       }
@@ -336,9 +346,11 @@
     if ((wsReady || (httpFallback && SERVER_URL)) && currentStrokeId) {
       if (wsReady) {
         try { ws.send(JSON.stringify({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID })); } catch (_) {}
+        slog('send end', { id: currentStrokeId });
       } else {
         postStrokeBatchFlush();
         postStroke({ type: 'stroke', phase: 'end', id: currentStrokeId, authorId: AUTHOR_ID });
+        slog('queue end(HTTP)', { id: currentStrokeId });
       }
       currentStrokeId = null;
     }
