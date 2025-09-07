@@ -29,15 +29,22 @@
         pointer-events: none; /* 背景クリック防止。キャンバスはイベントを受ける */
       }
       .canvas-box {
-        background: #fff; border-radius: 8px; overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        /* 外枠は透明。白地や影は内側の実キャンバスに付ける */
+        background: transparent; border-radius: 0; overflow: visible;
+        box-shadow: none;
         position: relative; width: 100%; height: auto; aspect-ratio: 210 / 297;
         transform-origin: center center;
         pointer-events: auto;
       }
       .transformer { position: absolute; inset: 0; transform-origin: center center; }
       .scaler { position: absolute; inset: 0; transform-origin: top center; }
-      .rotator { position: absolute; inset: 0; transform-origin: center center; }
+      .rotator {
+        position: absolute; inset: 0; transform-origin: center center;
+        /* 実キャンバスに角丸と影を付与（スケールや回転に追従） */
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        background: transparent;
+      }
       canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
       footer { padding: 6px 12px; font-size: 12px; color: #9ca3af; }
       code { color: #a7f3d0; }
