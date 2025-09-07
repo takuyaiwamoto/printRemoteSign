@@ -118,10 +118,8 @@ export class CanvasManager {
   }
 
   _pos(e) {
-    if (typeof e.offsetX === 'number' && typeof e.offsetY === 'number') {
-      const nx = this.canvas.clientWidth ? (e.offsetX / this.canvas.clientWidth) : 0;
-      const ny = this.canvas.clientHeight ? (e.offsetY / this.canvas.clientHeight) : 0;
-      return { x: nx * this.canvas.width, y: ny * this.canvas.height };
+    if (typeof window !== 'undefined' && window.SenderShared?.pointer?.eventToCanvasXY) {
+      return window.SenderShared.pointer.eventToCanvasXY(this.canvas, e);
     }
     const rect = this.canvas.getBoundingClientRect();
     const cx = (e.clientX ?? (e.touches?.[0]?.clientX || 0));

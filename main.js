@@ -330,13 +330,8 @@
   }
 
   function getPos(e) {
-    // 可能なら offsetX/Y（PointerEvent計算済み）を使用
-    if (typeof e.offsetX === 'number' && typeof e.offsetY === 'number') {
-      const nx = (canvas.clientWidth > 0) ? (e.offsetX / canvas.clientWidth) : 0;
-      const ny = (canvas.clientHeight > 0) ? (e.offsetY / canvas.clientHeight) : 0;
-      return { x: nx * canvas.width, y: ny * canvas.height };
-    }
-    // フォールバック: rect基準
+    if (window.SenderShared?.pointer?.eventToCanvasXY) return window.SenderShared.pointer.eventToCanvasXY(canvas, e);
+    // Fallback (legacy)
     const rect = canvas.getBoundingClientRect();
     const cx = (e.clientX ?? (e.touches?.[0]?.clientX || 0));
     const cy = (e.clientY ?? (e.touches?.[0]?.clientY || 0));
