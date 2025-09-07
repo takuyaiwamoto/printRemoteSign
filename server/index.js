@@ -191,6 +191,19 @@ app.post('/clear', (req, res) => {
   res.json({ ok: true });
 });
 
+// HTTP fallback for clearMine: clears only specified author layer across all clients
+app.post('/clearMine', (req, res) => {
+  const channelName = req.query.channel || 'default';
+  const ch = getChannel(channelName);
+  const authorId = String(req.body?.authorId || '');
+  if (!authorId) return res.status(400).json({ error: 'missing_authorId' });
+  const msg = { type: 'clearMine', authorId };
+  const txt = JSON.stringify(msg);
+  broadcast(ch, txt, () => true);
+  broadcastSSE(ch, msg);
+  res.json({ ok: true });
+});
+
 // Config endpoints
 app.get('/config', (req, res) => {
   const channelName = req.query.channel || 'default';

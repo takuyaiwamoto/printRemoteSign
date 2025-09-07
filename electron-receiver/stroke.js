@@ -39,6 +39,13 @@
       strokes.clear();
     }
 
+    function clearAuthor(authorId) {
+      const key = String(authorId || '');
+      const layer = authorLayers.get(key);
+      if (layer) layer.ctx.clearRect(0,0,layer.canvas.width, layer.canvas.height);
+      for (const [id, s] of Array.from(strokes.entries())) { if (String(s.author) === key) strokes.delete(id); }
+    }
+
     function compositeTo(ctx) {
       for (const { canvas } of authorLayers.values()) ctx.drawImage(canvas, 0, 0);
     }
@@ -104,9 +111,8 @@
       }
     }
 
-    return { init, resizeLayers, clearAll, compositeTo, handleStroke, process };
+    return { init, resizeLayers, clearAll, clearAuthor, compositeTo, handleStroke, process };
   })();
 
   window.StrokeEngine = StrokeEngine;
 })();
-

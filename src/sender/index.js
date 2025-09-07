@@ -117,6 +117,21 @@ transport.onmessage = (msg) => {
   }
 };
 
+// Ensure "clear" reaches senders even when WS is blocked: listen via SSE too
+(() => {
+  if (!SERVER_URL) return;
+  function toHttpBase(u) { return u.replace(/^wss?:\/\//i, (m) => m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/, ''); }
+  try {
+    const es = new EventSource(`${toHttpBase(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`);
+    es.addEventListener('clear', () => {
+      // Mimic the same behavior as WS clear: clear local + others
+      try { cm.clear(); } catch(_) {}
+      for (const {canvas, ctx} of otherLayers.values()) ctx.clearRect(0,0,canvas.width,canvas.height);
+      composeOthers();
+    });
+  } catch(_) { /* ignore: environments without EventSource */ }
+})();
+
 let realtimeEverUsed = false;
 cm.onStrokeStart = ({ id, nx, ny, color, size, sizeN }) => {
   if (SERVER_URL) {

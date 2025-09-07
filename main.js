@@ -531,15 +531,14 @@
     }
   });
   clearAllBtn?.addEventListener('click', () => clearBtn?.click() ?? (function(){
-    // 直接実行（ヘッダが無い場合）: レイヤだけ消す
+    // 押した人の描画だけ消す
     selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
-    for (const {canvas:c,ctx:k} of otherLayers.values()) k.clearRect(0,0,c.width,c.height);
     composeOthers();
     if (wsReady) {
-      try { ws.send(JSON.stringify({ type: 'clear' })); } catch (_) {}
+      try { ws.send(JSON.stringify({ type: 'clearMine', authorId: AUTHOR_ID })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
       const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-      fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+      fetch(`${httpBase.replace(/\/$/, '')}/clearMine?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ authorId: AUTHOR_ID }) }).catch(() => {});
     }
   })());
 

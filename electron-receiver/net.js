@@ -73,6 +73,7 @@
         if (msg.type === 'hello') { setInfo && setInfo('接続済み'); return; }
         if (msg.type === 'frame' && typeof msg.data === 'string') { onFrame && onFrame(msg.data); return; }
         if (msg.type === 'clear') { onClear && onClear(); return; }
+        if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
         if (msg.type === 'config' && msg.data) { onConfig && onConfig(msg.data); return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
       };
@@ -88,4 +89,3 @@
 
   window.ReceiverNet = { create };
 })();
-

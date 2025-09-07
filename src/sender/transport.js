@@ -66,4 +66,9 @@ export class Transport {
     if (this.wsSend({ type: 'clear' })) return;
     if (this.httpFallback) this.httpPost('/clear', {});
   }
+
+  sendClearMine(authorId) {
+    if (this.wsSend({ type: 'clearMine', authorId: String(authorId) })) return;
+    if (this.httpFallback) this.httpPost('/clearMine', { authorId: String(authorId) });
+  }
 }

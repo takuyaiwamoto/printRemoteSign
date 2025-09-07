@@ -367,7 +367,11 @@
     channel: CHANNEL,
     onFrame: (data) => { if (!ignoreFrames) ingestFrame(data); },
     onStroke: (m) => { if (m?.phase === 'start') ignoreFrames = true; window.StrokeEngine?.handleStroke?.(m); },
-    onClear: () => { window.StrokeEngine?.clearAll?.(); clearCanvas(); },
+    onClear: (authorId) => {
+      if (authorId) { window.StrokeEngine?.clearAuthor?.(String(authorId)); }
+      else { window.StrokeEngine?.clearAll?.(); }
+      clearCanvas();
+    },
     onConfig: (d) => applyConfig(d),
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
