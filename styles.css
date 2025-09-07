@@ -71,6 +71,8 @@ canvas {
   gap: 8px; /* 行/列の隙間 */
   justify-self: start; /* キャンバス側へ寄せる（ワイド時） */
   align-items: start; /* 縦方向で余白を作らない */
+  --btn-size: 44px;
+  --gap: 8px;
 }
 .side-tools .group {
   display: grid;
@@ -140,6 +142,8 @@ canvas {
     grid-template-columns: auto auto; /* 左:太さ 右:色 を同一行に */
     justify-items: start;
     width: var(--tools-width, auto); /* JSでキャンバス幅と同期 */
+    /* 太さボタンの3つ目位置から開始するよう左に余白を追加 */
+    padding-left: calc(var(--btn-size) * 2 + var(--gap) * 2);
   }
   .side-tools .group { grid-auto-flow: column; }
   .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: column; }
