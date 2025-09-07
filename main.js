@@ -413,6 +413,9 @@
       }
       currentStrokeId = null;
     }
+
+    // リサイズ保留があればここで反映（ペン入力中のサイズ変化で座標ズレを防ぐ）
+    applyPendingResizeIfNeeded();
   }
 
   // 入力ハンドラ登録（Pointer / Mouse / Touch いずれでも動作）
@@ -527,5 +530,14 @@
   // 初期化 & リサイズ（内容保持）
   fitToViewport(false);
   resizeOtherLayers(); composeOthers();
-  window.addEventListener('resize', () => { fitToViewport(true); resizeOtherLayers(); composeOthers(); });
+  let resizePending = false;
+  window.addEventListener('resize', () => {
+    if (isDrawing) { resizePending = true; return; }
+    fitToViewport(true); resizeOtherLayers(); composeOthers();
+  });
+  // 描画終了時に保留リサイズを反映
+  function applyPendingResizeIfNeeded(){
+    if (!resizePending) return; resizePending = false;
+    fitToViewport(true); resizeOtherLayers(); composeOthers();
+  }
 })();
