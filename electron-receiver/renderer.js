@@ -68,9 +68,32 @@
   const canvasBox = document.getElementById('canvasBox');
 
   // Realtime stroke rendering state
-  const strokes = new Map(); // id -> { color, sizeCss, points: [{x,y,time}], drawnUntil: number, ended: boolean }
+  const strokes = new Map(); // id -> { author, color, sizeCss, sizeDev, points: [{x,y,time}], drawnUntil: number, ended: boolean }
+  const authorLayers = new Map(); // authorId -> {canvas, ctx}
   const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
   const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 200))));
+
+  function getAuthorLayer(author) {
+    const key = String(author || 'anon');
+    if (!authorLayers.has(key)) {
+      const c = document.createElement('canvas');
+      c.width = baseCanvas.width; c.height = baseCanvas.height;
+      const k = c.getContext('2d');
+      k.imageSmoothingEnabled = true; k.imageSmoothingQuality = 'high';
+      authorLayers.set(key, { canvas: c, ctx: k });
+    }
+    return authorLayers.get(key);
+  }
+
+  function resizeAuthorLayers() {
+    for (const [key, layer] of authorLayers) {
+      const off = document.createElement('canvas'); off.width = baseCanvas.width; off.height = baseCanvas.height;
+      off.getContext('2d').drawImage(layer.canvas, 0, 0, layer.canvas.width, layer.canvas.height, 0, 0, off.width, off.height);
+      layer.canvas.width = off.width; layer.canvas.height = off.height;
+      layer.ctx = layer.canvas.getContext('2d'); layer.ctx.imageSmoothingEnabled = true; layer.ctx.imageSmoothingQuality = 'high';
+      layer.ctx.drawImage(off, 0, 0);
+    }
+  }
 
   function setStatus(text) { statusEl.textContent = text; }
   function setInfo(text) {
@@ -189,6 +212,8 @@
     ink.setTransform(1, 0, 0, 1, 0, 0);
     ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
     ink.restore();
+    // composite all author layers
+    ink.save(); ink.setTransform(1,0,0,1,0,0); for (const {canvas} of authorLayers.values()) ink.drawImage(canvas,0,0); ink.restore();
   }
 
   function drawBackground() {
@@ -266,15 +291,13 @@
       const now = performance.now();
       const p = { x: pxy.x, y: pxy.y, time: now };
       const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * baseCanvas.width) : (Number(msg.size || 4) * DPR);
-      const s = { color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], drawnUntil: 0, ended: false };
+      const s = { author: String(msg.authorId || 'anon'), color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], drawnUntil: 0, ended: false };
       strokes.set(id, s);
       // 即時に開始点を指定太さで可視化（細く見える問題を避ける）
-      if (ink) {
-        ink.beginPath();
-        ink.fillStyle = s.color;
-        ink.arc(p.x, p.y, (s.sizeDev) / 2, 0, Math.PI * 2);
-        ink.fill();
-      }
+      const lay = getAuthorLayer(s.author).ctx;
+      lay.beginPath(); lay.fillStyle = s.color; lay.arc(p.x, p.y, s.sizeDev/2, 0, Math.PI*2); lay.fill();
+      // 合成
+      ink.save(); ink.setTransform(1,0,0,1,0,0); ink.drawImage(getAuthorLayer(s.author).canvas,0,0); ink.restore();
       return;
     }
     const id = String(msg.id || '');
@@ -330,10 +353,11 @@
         }
       }
 
-      ink.lineJoin = 'round';
-      ink.lineCap = 'round';
-      ink.strokeStyle = s.color;
-      ink.lineWidth = s.sizeDev || (s.sizeCss * DPR);
+      const ctxL = getAuthorLayer(String(s.author || 'anon')).ctx;
+      ctxL.lineJoin = 'round';
+      ctxL.lineCap = 'round';
+      ctxL.strokeStyle = s.color;
+      ctxL.lineWidth = s.sizeDev || (s.sizeCss * DPR);
 
       let drew = false;
       const ctx = getAuthorLayer(String(s.author || 'anon')).ctx;
@@ -450,8 +474,11 @@
         }
         lastDrawnVersion = frameVersion;
       }
-      // Always process stroke queues toward target time
+      // Always process stroke queues toward target time, then composite author layers to ink
       processStrokes();
+      ink.save(); ink.setTransform(1,0,0,1,0,0); ink.clearRect(0,0,inkCanvas.width, inkCanvas.height);
+      for (const {canvas} of authorLayers.values()) ink.drawImage(canvas,0,0);
+      ink.restore();
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
