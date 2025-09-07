@@ -1,6 +1,8 @@
 import http from 'http';
 import express from 'express';
 import { WebSocketServer } from 'ws';
+import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
+import { registerHttpRoutes } from './httpRoutes.js';
 const RELAY_VERSION = '0.6.2';
 
 const app = express();
@@ -13,32 +15,10 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '20mb' }));
+// Register HTTP routes (same behavior as before)
+registerHttpRoutes(app);
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
-
-// channel => { lastFrame: string | null, clients: Set<{ws, role}>, sse: Set<res>, config: object }
-const channels = new Map();
-
-function getChannel(name) {
-  if (!channels.has(name)) channels.set(name, { lastFrame: null, clients: new Set(), sse: new Set(), config: {} });
-  return channels.get(name);
-}
-
-function broadcast(channel, data, predicate = () => true) {
-  for (const c of channel.clients) {
-    if (c.ws.readyState === 1 && predicate(c)) {
-      try { c.ws.send(data); } catch (_) {}
-    }
-  }
-}
-
-function broadcastSSE(channel, eventObj) {
-  const payload = `event: ${eventObj.type}\n` +
-                  `data: ${JSON.stringify(eventObj)}\n\n`;
-  for (const res of channel.sse) {
-    try { res.write(payload); } catch (_) {}
-  }
-}
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -116,110 +96,8 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-app.get('/', (_req, res) => {
-  res.type('text/plain').send(`OK: drawing-relay-server v${RELAY_VERSION}`);
-});
-
 app.get('/version', (_req, res) => {
   res.json({ name: 'drawing-relay-server', version: RELAY_VERSION });
-});
-
-// Server-Sent Events endpoint for receivers behind WS-blocking proxies
-app.get('/events', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-  ch.sse.add(res);
-  // hello
-  try { res.write(`event: hello\ndata: ${JSON.stringify({ channel: channelName })}\n\n`); } catch (_) {}
-  if (ch.lastFrame) {
-    try { res.write(`event: frame\ndata: ${JSON.stringify({ type:'frame', data: ch.lastFrame })}\n\n`); } catch (_) {}
-  }
-  const keep = setInterval(() => { try { res.write(':keep-alive\n\n'); } catch (_) {} }, 15000);
-  req.on('close', () => { clearInterval(keep); ch.sse.delete(res); });
-});
-
-// HTTP fallback endpoints (optional). Useful when proxies block WebSockets.
-app.get('/last', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  res.json({ type: 'frame', data: ch.lastFrame || null });
-});
-
-app.post('/frame', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  const data = req.body?.data;
-  if (typeof data !== 'string' || data.length > 10 * 1024 * 1024) {
-    return res.status(400).json({ error: 'invalid_or_too_large' });
-  }
-  ch.lastFrame = data;
-  const txt = JSON.stringify({ type: 'frame', data });
-  broadcast(ch, txt, (c) => c.role === 'receiver');
-  broadcastSSE(ch, { type: 'frame', data });
-  res.json({ ok: true });
-});
-
-// HTTP fallback for strokes: accepts single or batched events
-app.post('/stroke', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  const body = req.body || {};
-  const events = Array.isArray(body.batch) ? body.batch : [body];
-  for (const e of events) {
-    if (!e || e.type !== 'stroke' || !e.phase) continue;
-    const msg = { type: 'stroke', phase: e.phase, id: e.id, nx: e.nx, ny: e.ny, color: e.color, size: e.size };
-    const txt = JSON.stringify(msg);
-    broadcast(ch, txt, (c) => c.role === 'receiver');
-    broadcastSSE(ch, msg);
-  }
-  res.json({ ok: true });
-});
-
-app.post('/clear', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  const msg = { type: 'clear' };
-  const txt = JSON.stringify(msg);
-  // Broadcast to all roles so that senders also clear their local canvases
-  broadcast(ch, txt, () => true);
-  broadcastSSE(ch, msg);
-  ch.lastFrame = null;
-  res.json({ ok: true });
-});
-
-// HTTP fallback for clearMine: clears only specified author layer across all clients
-app.post('/clearMine', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  const authorId = String(req.body?.authorId || '');
-  if (!authorId) return res.status(400).json({ error: 'missing_authorId' });
-  const msg = { type: 'clearMine', authorId };
-  const txt = JSON.stringify(msg);
-  broadcast(ch, txt, () => true);
-  broadcastSSE(ch, msg);
-  res.json({ ok: true });
-});
-
-// Config endpoints
-app.get('/config', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  res.json(ch.config || {});
-});
-app.post('/config', (req, res) => {
-  const channelName = req.query.channel || 'default';
-  const ch = getChannel(channelName);
-  const data = req.body?.data;
-  if (!data || typeof data !== 'object') return res.status(400).json({ error: 'invalid' });
-  ch.config = { ...(ch.config || {}), ...data };
-  const payload = JSON.stringify({ type: 'config', data });
-  broadcast(ch, payload, () => true);
-  broadcastSSE(ch, { type: 'config', data });
-  res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 8787;
