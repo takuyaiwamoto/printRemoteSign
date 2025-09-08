@@ -112,4 +112,18 @@
   function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
   animX?.addEventListener('input', ()=>{ animXV.textContent = animX.value; pushAnim(); });
   animZ?.addEventListener('input', ()=>{ animZV.textContent = animZ.value; pushAnim(); });
+
+  // Audio volume for animation B
+  const volEl = document.getElementById('animAudioVol');
+  const volVal = document.getElementById('animAudioVolVal');
+  let vtimer = null;
+  function sendAudioVol(v){
+    const vol = Math.max(0, Math.min(100, Math.round(Number(v)||0)));
+    const data = { animAudioVol: vol };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+  volEl?.addEventListener('input', ()=>{ volVal.textContent = volEl.value; clearTimeout(vtimer); vtimer = setTimeout(()=> sendAudioVol(volEl.value), 120); });
 })();

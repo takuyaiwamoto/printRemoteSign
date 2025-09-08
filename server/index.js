@@ -39,6 +39,11 @@ wss.on('connection', (ws, req) => {
   if (ch.config && Object.keys(ch.config).length) {
     try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch (_) {}
   }
+  // Provide default animation type B on fresh channels
+  if (!ch.config || !ch.config.animType) {
+    ch.config = { ...(ch.config||{}), animType: 'B', animAudioVol: (ch.config?.animAudioVol ?? 70) };
+    try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch(_) {}
+  }
 
   ws.on('message', (raw) => {
     let msg = null;

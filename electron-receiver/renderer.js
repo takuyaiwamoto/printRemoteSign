@@ -36,6 +36,8 @@
   let lastDrawnVersion = -1;
   let rafRunning = false;
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
+  // Optional ink fade alpha (used by animation B)
+  let inkFadeAlpha = 1;
   const { canvasBox, scaler, rotator } = (window.CanvasLayout?.getElements?.() || {
     canvasBox: document.getElementById('canvasBox'),
     scaler: document.getElementById('scaler'),
@@ -53,7 +55,7 @@
     base: baseCanvas,
     onScaleCb: (v) => { scalePct = v; applyBoxTransform(); log('scaleReceiver applied', { v, factor: v/100 }); },
     onRotateCb: (deg) => { rotationDeg = deg === 180 ? 180 : 0; applyBoxTransform(); log('rotateReceiver applied', { rotationDeg }); },
-    onKickCb: () => { tryStartSendAnimation(); },
+    onKickCb: () => { tryStartAnimation(); },
     logCb: (...a) => log(...a)
   });
 
@@ -283,7 +285,10 @@
           ink.save();
           ink.setTransform(1, 0, 0, 1, 0, 0);
           ink.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+          const ga1 = (typeof inkFadeAlpha === 'number') ? Math.max(0, Math.min(1, inkFadeAlpha)) : 1;
+          const prevA1 = ink.globalAlpha; ink.globalAlpha = ga1;
           window.StrokeEngine?.compositeTo?.(ink);
+          ink.globalAlpha = prevA1;
           ink.restore();
         }
         lastDrawnVersion = frameVersion;
@@ -291,7 +296,10 @@
       // Always process stroke queues toward target time, then composite author layers to ink
       window.StrokeEngine?.process?.();
       ink.save(); ink.setTransform(1,0,0,1,0,0); ink.clearRect(0,0,inkCanvas.width, inkCanvas.height);
+      const ga = (typeof inkFadeAlpha === 'number') ? Math.max(0, Math.min(1, inkFadeAlpha)) : 1;
+      const prevAlpha = ink.globalAlpha; ink.globalAlpha = ga;
       window.StrokeEngine?.compositeTo?.(ink);
+      ink.globalAlpha = prevAlpha;
       ink.restore();
       requestAnimationFrame(loop);
     };
@@ -391,8 +399,104 @@
   // Placeholder for Animation B (to be specified later): simple confetti burst only
   function tryStartAnimB(){
     if (animRunning) return; animRunning = true;
-    try { startConfetti(2000); } catch(_) {}
-    setTimeout(()=>{ animRunning = false; }, 2500);
+    const delays = window.ReceiverConfig?.getAnimDelays?.() || { rotateDelaySec:0, moveDelaySec:0 };
+    const rotateDelay = Math.max(0, Math.min(10, Number(delays.rotateDelaySec)||0)) * 1000;
+    const moveDelay = Math.max(0, Math.min(10, Number(delays.moveDelaySec)||0)) * 1000; // used after video end
+    const rotateDur = 1000; // 1s
+    const moveDur = 1500;   // 1.5s
+
+    const audioVol = Math.max(0, Math.min(100, Number(window.ReceiverConfig?.getAnimAudioVol?.()||70)))/100;
+    const videoCandidates = [
+      'electron-receiver/assets/backVideo1.mp4',
+      'assets/backVideo1.mp4',
+      'backVideo1.mp4', '../backVideo1.mp4'
+    ];
+    const audioCandidates = [
+      'electron-receiver/assets/signMusic.mp3',
+      'assets/signMusic.mp3',
+      'signMusic.mp3', '../signMusic.mp3'
+    ];
+
+    let videoEl = document.createElement('video'); videoEl.muted = false; videoEl.playsInline = true; videoEl.preload = 'auto';
+    let audioEl = document.createElement('audio'); audioEl.volume = audioVol; audioEl.preload = 'auto';
+
+    function selectSrc(el, list){ return new Promise((res,rej)=>{
+      let i=0; const tryNext=()=>{ if(i>=list.length) return rej(new Error('no_source')); el.src=list[i++]; el.load(); setTimeout(()=>res(true),0); };
+      tryNext();
+    }); }
+
+    // rotation after X sec
+    setTimeout(()=>{
+      const startDeg = rotationDeg || 0; const endDeg = (startDeg + 180)%360; if (rotator) rotator.style.transition = `transform ${rotateDur}ms ease`;
+      rotationDeg = endDeg; applyBoxTransform();
+
+      // start video/audio
+      (async()=>{
+        try { await selectSrc(videoEl, videoCandidates); } catch(e){ console.warn('video src not found', e); }
+        try { await selectSrc(audioEl, audioCandidates); } catch(e){ console.warn('audio src not found', e); }
+
+        // play audio with fade-out at end
+        audioEl.onended = ()=>{ const t0=performance.now(); const dur=1000; const v0=audioEl.volume; const tick=(t)=>{ const e=Math.min(1,(t-t0)/dur); audioEl.volume=v0*(1-e); if(e<1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); };
+        try { audioEl.play().catch(()=>{}); } catch(_) {}
+
+        // draw video into base canvas (cover fit)
+        let videoEnded = false; videoEl.onended = ()=>{ videoEnded = true; videoEl.pause(); };
+        try { await videoEl.play().catch(()=>{}); } catch(_) {}
+
+        // fade-out ink over 1s
+        const fadeOutStart = performance.now(); const fadeDur = 1000; let fadingOut=true; let fadingIn=false; let fadeInStart=0;
+
+        function drawVideo(){
+          try {
+            const sw = videoEl.videoWidth||0, sh = videoEl.videoHeight||0; if(sw && sh){
+              const cw = baseCanvas.width, ch = baseCanvas.height; const sRatio=sw/sh, cRatio=cw/ch; let sx=0, sy=0, sWidth=sw, sHeight=sh;
+              if(sRatio>cRatio){ sWidth=sh*cRatio; sx=(sw-sWidth)/2; } else if(sRatio<cRatio){ sHeight=sw/cRatio; sy=(sh-sHeight)/2; }
+              base.save(); base.setTransform(1,0,0,1,0,0); base.drawImage(videoEl, sx,sy,sWidth,sHeight, 0,0,cw,ch); base.restore();
+            }
+          } catch(_) {}
+        }
+
+        const rafLoop = ()=>{
+          // draw current video frame
+          drawVideo();
+          // handle ink fade-out then fade-in after ended
+          if (fadingOut){ const e = Math.min(1,(performance.now()-fadeOutStart)/fadeDur); inkFadeAlpha = 1 - e; if(e>=1){ fadingOut=false; } }
+          if (videoEnded && !fadingIn){ // start fade-in once video ended
+            fadingIn = true; fadeInStart = performance.now();
+          }
+          if (fadingIn){ const e=Math.min(1,(performance.now()-fadeInStart)/fadeDur); inkFadeAlpha = e; if(e>=1){ fadingIn=false; }
+          }
+          if (!videoEnded || fadingIn){ requestAnimationFrame(rafLoop); } else { inkFadeAlpha = 1; }
+        };
+        // enable ink alpha modulation in composite path
+        inkFadeAlpha = 1; fadeInStart = 0; fadingIn=false;
+        requestAnimationFrame(rafLoop);
+
+        // after video ended + Z sec, start move + confetti
+        const waitForEnd = setInterval(()=>{
+          if (videoEnded){ clearInterval(waitForEnd); setTimeout(()=>{ try { startConfetti(1700); } catch(_) {} startMove(); }, moveDelay); }
+        }, 100);
+
+        function startMove(){
+          const box = canvasBox; if (!box) return finish();
+          const start = performance.now(); const from=0, to=(window.innerHeight||2000);
+          const tick=(t)=>{ const e=Math.min(1,(t-start)/moveDur); const y=from+(to-from)*e; box.style.transform=`translateY(${y}px)`; if(e<1) requestAnimationFrame(tick); else afterMove(); };
+          requestAnimationFrame(tick);
+        }
+      })();
+    }, rotateDelay);
+
+    function afterMove(){
+      setTimeout(()=>{
+        // reset: clear & transforms restore
+        try {
+          const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+            .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+          fetch(`${httpBase}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
+        } catch(_) {}
+        window.StrokeEngine?.clearAll?.(); clearCanvas(); if (rotator) rotator.style.transition=''; if (canvasBox) canvasBox.style.transform=''; rotationDeg=180; applyBoxTransform(); animRunning=false;
+      }, 500);
+    }
   }
 
   // ---- Fireworks overlay (window-wide, 2D canvas) ----

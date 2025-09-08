@@ -8,7 +8,8 @@
   let onKick = null;
   let animRotateDelaySec = 0;
   let animMoveDelaySec = 0;
-  let animType = 'A';
+  let animType = 'B';
+  let animAudioVol = 70; // percent
 
   function init({ base, onScaleCb, onRotateCb, onKickCb, logCb }) {
     baseCanvas = base;
@@ -17,7 +18,7 @@
     onKick = onKickCb || (() => {});
     log = logCb || (() => {});
     // default animType if not set
-    if (!animType) animType = 'A';
+    if (!animType) animType = 'B';
   }
 
   function drawBackground(ctx) {
@@ -86,11 +87,17 @@
       animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
       log('anim type', animType);
     }
+    if (typeof data.animAudioVol !== 'undefined') {
+      const v = Math.max(0, Math.min(100, Math.round(Number(data.animAudioVol)||70)));
+      animAudioVol = v;
+      log('anim audio vol', animAudioVol);
+    }
     if (typeof data.animKick !== 'undefined') { try { onKick && onKick(); } catch(_) {} }
   }
 
   function getAnimDelays() { return { rotateDelaySec: animRotateDelaySec, moveDelaySec: animMoveDelaySec }; }
   function getAnimType() { return animType; }
+  function getAnimAudioVol() { return animAudioVol; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol };
 })();
