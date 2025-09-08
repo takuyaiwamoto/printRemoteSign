@@ -13,7 +13,7 @@
   let animReappearDelaySec = null; // null=use built-in defaults per animation
   let printDelaySec = 0; // seconds (0-15)
   let rotateDegState = 180; // track latest applied rotation (0 or 180)
-  let printRotate180 = false; // explicit print rotation override
+  let printRotate180 = null; // explicit print rotation override (null=follow screen rotation)
   let lastAnimKick = 0;
   let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
