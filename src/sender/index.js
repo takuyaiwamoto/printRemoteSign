@@ -38,7 +38,7 @@ transport.onmessage = (msg) => {
       let el = document.getElementById('senderCountdown');
       if (!el) {
         el = document.createElement('div'); el.id = 'senderCountdown';
-        el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:24px;color:#fff;text-shadow:0 0 6px #3b82f6,0 0 12px #3b82f6,0 0 18px #3b82f6;pointer-events:none;';
+        el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:36px;color:#fff;text-shadow:0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6;pointer-events:none;';
         el.textContent = '終了まで0秒'; document.body.appendChild(el);
       }
       if (left > 0) { el.style.display = 'block'; el.textContent = `終了まで${left}秒`; }

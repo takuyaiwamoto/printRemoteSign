@@ -20,7 +20,7 @@
         z-index: 10;
       }
       .btns { position: absolute; right: 8px; top: 8px; display: grid; grid-auto-flow: column; gap: 8px; z-index: 11; }
-      .count { position: absolute; right: 12px; top: 10px; z-index: 12; font-size: 24px; color: #fff; text-shadow: 0 0 6px #3b82f6, 0 0 12px #3b82f6, 0 0 18px #3b82f6; display:none; }
+      .count { position: absolute; right: 12px; top: 10px; z-index: 12; font-size: 36px; color: #fff; text-shadow: 0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6; display:none; }
       .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); 
              display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag; }
       .btn:hover { background: rgba(0,0,0,.35); }
@@ -29,7 +29,7 @@
       .img-wrap { position: fixed; inset: 0; display: grid; place-items: center; z-index: 1; pointer-events: none; width: 100%; height: 100%; transform: translateY(0); will-change: transform; }
       .img-wrap img { width: 100%; height: 100%; object-fit: cover; }
       .move-up { transform: translateY(-120%); }
-      .animate { transition: transform 800ms ease; }
+      .animate { transition: transform 2500ms ease; }
       .hidden { display: none; }
       .label { font-size: 28px; font-weight: 800; letter-spacing: .1em; text-shadow: 0 2px 10px rgba(0,0,0,.35); }
     </style>
@@ -88,24 +88,15 @@
           const es = new EventSource(`${toHttp(SERVER)}/events?channel=${encodeURIComponent(CHANNEL)}`);
           es.addEventListener('overlayStart', () => {
             try { console.log('[overlay] overlayStart'); } catch(_) {}
-            // after 3s, move image up; then after 5s, move back down
-            setTimeout(()=>{
-              try { console.log('[overlay] moving up'); } catch(_) {}
-              // ensure visible
-              imgWrap.classList.remove('hidden');
-              // ensure transition applies
-              imgWrap.classList.add('animate');
-              // next frame to start transition cleanly
-              requestAnimationFrame(() => {
-                imgWrap.classList.add('move-up');
-                // moving back timing driven by overlayStaySec (from config); fallback 5000ms if unknown
-                const backMs = (window.__overlayStaySec||5) * 1000;
-                setTimeout(()=>{
-                  try { console.log('[overlay] moving back'); } catch(_) {}
-                  imgWrap.classList.remove('move-up');
-                }, backMs);
-              });
-            }, 3000);
+            // move up immediately
+            try { console.log('[overlay] moving up'); } catch(_) {}
+            imgWrap.classList.remove('hidden');
+            imgWrap.classList.add('animate');
+            requestAnimationFrame(() => {
+              imgWrap.classList.add('move-up');
+              const backMs = (window.__overlayStaySec||5) * 1000;
+              setTimeout(()=>{ try { console.log('[overlay] moving back'); } catch(_) {}; imgWrap.classList.remove('move-up'); }, backMs);
+            });
           });
           es.addEventListener('config', (ev) => { try {
             const j = JSON.parse(ev.data);
@@ -125,14 +116,13 @@
       try {
         window.OverlayApi?.onOverlayStart?.(() => {
           try { console.log('[overlay] overlayStart via IPC'); } catch(_) {}
-          setTimeout(()=>{
-            imgWrap.classList.remove('hidden');
-            imgWrap.classList.add('animate');
-            requestAnimationFrame(() => {
-              imgWrap.classList.add('move-up');
-              setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, 5000);
-            });
-          }, 3000);
+          imgWrap.classList.remove('hidden');
+          imgWrap.classList.add('animate');
+          requestAnimationFrame(() => {
+            imgWrap.classList.add('move-up');
+            const backMs = (window.__overlayStaySec||5) * 1000;
+            setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, backMs);
+          });
         });
       } catch(_) {}
     </script>

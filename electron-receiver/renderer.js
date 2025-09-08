@@ -335,7 +335,8 @@
       if (type === 'overlayStart') {
         try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
         try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
-        setTimeout(() => { startOverlayCountdown(); }, 3000);
+        // Start countdown after it reaches the top (2.5s)
+        setTimeout(() => { startOverlayCountdown(); }, 2500);
       }
     },
     setStatus: (t) => setStatus(t),
