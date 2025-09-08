@@ -17,15 +17,16 @@
       .bar {
         position: fixed; inset: 0 0 auto 0; height: 44px;
         -webkit-app-region: drag; /* ドラッグで移動 */
+        z-index: 10;
       }
-      .btns { position: absolute; right: 8px; top: 8px; display: grid; grid-auto-flow: column; gap: 8px; }
+      .btns { position: absolute; right: 8px; top: 8px; display: grid; grid-auto-flow: column; gap: 8px; z-index: 11; }
       .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); 
              display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag; }
       .btn:hover { background: rgba(0,0,0,.35); }
       .icon { width: 16px; height: 16px; display: block; }
-      .center { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
-      .img-wrap { position: fixed; inset: 0; display: grid; place-items: center; }
-      .img-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .center { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9; }
+      .img-wrap { position: fixed; inset: 0; display: grid; place-items: center; z-index: 1; pointer-events: none; width: 100%; height: 100%; transform: translateY(0); will-change: transform; }
+      .img-wrap img { width: 100%; height: 100%; object-fit: cover; }
       .move-up { transform: translateY(-120%); }
       .animate { transition: transform 800ms ease; }
       .hidden { display: none; }
@@ -48,7 +49,8 @@
       </div>
     </div>
     <div id="centerLabel" class="center hidden"><div class="label">透明中</div></div>
-    <div id="imgWrap" class="img-wrap"><img id="waitImg" src="waiting.png" alt="waiting" /></div>
+    <!-- waiting.png はプロジェクト直下に配置。overlay.html からは1つ上の階層を参照 -->
+    <div id="imgWrap" class="img-wrap hidden"><img id="waitImg" src="../waiting.png" alt="waiting" /></div>
 
     <script>
       const fullBtn = document.getElementById('btn-full');
@@ -70,7 +72,7 @@
         // クリック透過を有効化して下のウィンドウを操作可能に
         setTimeout(() => { window.OverlayApi?.setPassThrough?.(true); }, 50);
         // 透明時は待機画像をフルで表示
-        imgWrap.style.display = 'grid';
+        imgWrap.classList.remove('hidden');
       });
 
       // --- Networking: subscribe to overlayStart via SSE ---
@@ -86,13 +88,38 @@
             try { console.log('[overlay] overlayStart'); } catch(_) {}
             // after 3s, move image up; then after 5s, move back down
             setTimeout(()=>{
+              try { console.log('[overlay] moving up'); } catch(_) {}
+              // ensure visible
+              imgWrap.classList.remove('hidden');
+              // ensure transition applies
               imgWrap.classList.add('animate');
-              imgWrap.classList.add('move-up');
-              setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, 5000);
+              // next frame to start transition cleanly
+              requestAnimationFrame(() => {
+                imgWrap.classList.add('move-up');
+                setTimeout(()=>{
+                  try { console.log('[overlay] moving back'); } catch(_) {}
+                  imgWrap.classList.remove('move-up');
+                }, 5000);
+              });
             }, 3000);
           });
         } catch(_) {}
       })();
+
+      // Also listen via IPC from receiver renderer (bridge)
+      try {
+        window.OverlayApi?.onOverlayStart?.(() => {
+          try { console.log('[overlay] overlayStart via IPC'); } catch(_) {}
+          setTimeout(()=>{
+            imgWrap.classList.remove('hidden');
+            imgWrap.classList.add('animate');
+            requestAnimationFrame(() => {
+              imgWrap.classList.add('move-up');
+              setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, 5000);
+            });
+          }, 3000);
+        });
+      } catch(_) {}
     </script>
   </body>
   </html>

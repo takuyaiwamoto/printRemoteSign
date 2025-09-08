@@ -332,6 +332,10 @@
       if (type === 'printNow') {
         trySchedulePrint();
       }
+      if (type === 'overlayStart') {
+        try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
+        try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
+      }
     },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),

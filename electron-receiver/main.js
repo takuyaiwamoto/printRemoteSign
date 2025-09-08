@@ -35,6 +35,7 @@ function createWindow() {
   createOverlayWindow();
 }
 
+let overlayWin = null;
 function createOverlayWindow() {
   try {
     const primary = screen.getPrimaryDisplay();
@@ -67,6 +68,7 @@ function createOverlayWindow() {
       qs.set('server', server); qs.set('channel', channel);
     } catch(_) {}
     ov.loadFile('overlay.html', { query: Object.fromEntries(qs) });
+    overlayWin = ov;
 
     // IPC: overlay commands
     ipcMain.on('overlay:go-fullscreen', () => {
@@ -84,6 +86,11 @@ function createOverlayWindow() {
     });
     ipcMain.on('overlay:pass-through', (_ev, on) => {
       try { ov.setIgnoreMouseEvents(!!on, { forward: true }); } catch(_) {}
+    });
+
+    // Forward triggers from receiver renderer to overlay window
+    ipcMain.on('overlay:trigger', (_ev, type) => {
+      try { overlayWin?.webContents?.send('overlay:start', type); } catch(_) {}
     });
   } catch (e) {
     console.error('[overlay] create error', e);
