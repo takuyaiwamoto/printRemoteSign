@@ -1,4 +1,6 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { execFile } = require('child_process');
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
@@ -116,7 +118,36 @@ ipcMain.on('print-ink', async (ev, payload) => {
   try {
     const targetName = 'Brother_MFC_J6983CDW_2';
     console.log('[print] received job payload bytes=', (payload?.dataURL||'').length);
-    // Hidden window to render the image for printing
+    // Try CUPS `lp` path first to force plain paper (MediaType=stationery). Fallback to webContents.print.
+    const tryLpFirst = process.platform === 'darwin' || process.platform === 'linux';
+
+    async function printViaLp(dataUrl){
+      return new Promise((resolve, reject) => {
+        try {
+          const m = String(dataUrl||'').match(/^data:image\/\w+;base64,(.*)$/);
+          if (!m) return reject(new Error('invalid_dataurl'));
+          const buf = Buffer.from(m[1], 'base64');
+          const tmp = path.join(os.tmpdir(), `print_${Date.now()}_${Math.random().toString(36).slice(2)}.png`);
+          fs.writeFileSync(tmp, buf);
+          const args = [
+            '-d', targetName,
+            // Force plain paper and tray-1. Quality normal.
+            '-o', 'MediaType=stationery',
+            '-o', 'InputSlot=tray-1',
+            '-o', 'print-quality=Normal',
+            // If needed, uncomment to force page size: '-o', 'PageSize=Postcard',
+            tmp
+          ];
+          console.log('[print][lp] exec lp', args.join(' '));
+          execFile('lp', args, (err, stdout, stderr) => {
+            try { fs.unlink(tmp, ()=>{}); } catch(_) {}
+            if (err) { console.error('[print][lp] error', err?.message||err, stderr||''); reject(err); }
+            else { console.log('[print][lp] submitted', stdout?.trim()||''); resolve(true); }
+          });
+        } catch(e){ reject(e); }
+      });
+    }
+    // Hidden window to render the image for printing (fallback route)
     const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
     const html = `<!doctype html><html><head><meta charset='utf-8'><style>
       html,body{margin:0;padding:0}
@@ -125,9 +156,18 @@ ipcMain.on('print-ink', async (ev, payload) => {
       img{max-width:100%;max-height:100%;}
     </style></head><body><div class='wrap'><img id='p' src='${payload?.dataURL || ''}'/></div></body></html>`;
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-    // Give the image a moment to load in renderer
+    // Give the image a moment to load in renderer OR try CUPS first
     setTimeout(async () => {
       try {
+        if (tryLpFirst) {
+          try {
+            await printViaLp(payload?.dataURL||'');
+            try { win.close(); } catch(_) {}
+            return;
+          } catch (e) {
+            console.warn('[print] lp route failed, falling back to webContents.print', e?.message||e);
+          }
+        }
         const printers = await win.webContents.getPrintersAsync();
         console.log('[print] available printers:', printers.map(p=>p.name));
         const found = printers.find(p => (p.name === targetName) || (p.displayName === targetName));
