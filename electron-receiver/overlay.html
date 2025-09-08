@@ -20,6 +20,7 @@
         z-index: 10;
       }
       .btns { position: absolute; right: 8px; top: 8px; display: grid; grid-auto-flow: column; gap: 8px; z-index: 11; }
+      .count { position: absolute; right: 12px; top: 10px; z-index: 12; font-size: 24px; color: #fff; text-shadow: 0 0 6px #3b82f6, 0 0 12px #3b82f6, 0 0 18px #3b82f6; display:none; }
       .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); 
              display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag; }
       .btn:hover { background: rgba(0,0,0,.35); }
@@ -51,6 +52,7 @@
     <div id="centerLabel" class="center hidden"><div class="label">透明中</div></div>
     <!-- waiting.png はプロジェクト直下に配置。overlay.html からは1つ上の階層を参照 -->
     <div id="imgWrap" class="img-wrap hidden"><img id="waitImg" src="../waiting.png" alt="waiting" /></div>
+    <div id="ovCount" class="count">0秒</div>
 
     <script>
       const fullBtn = document.getElementById('btn-full');
@@ -96,13 +98,26 @@
               // next frame to start transition cleanly
               requestAnimationFrame(() => {
                 imgWrap.classList.add('move-up');
+                // moving back timing driven by overlayStaySec (from config); fallback 5000ms if unknown
+                const backMs = (window.__overlayStaySec||5) * 1000;
                 setTimeout(()=>{
                   try { console.log('[overlay] moving back'); } catch(_) {}
                   imgWrap.classList.remove('move-up');
-                }, 5000);
+                }, backMs);
               });
             }, 3000);
           });
+          es.addEventListener('config', (ev) => { try {
+            const j = JSON.parse(ev.data);
+            if (j && j.data) {
+              if (typeof j.data.overlayStaySec !== 'undefined') { const v = Number(j.data.overlayStaySec); if (isFinite(v)) window.__overlayStaySec = Math.max(1, Math.min(60, Math.round(v))); }
+              if (typeof j.data.overlayRemainSec !== 'undefined') {
+                const left = Math.max(0, Math.floor(Number(j.data.overlayRemainSec)||0));
+                const el = document.getElementById('ovCount');
+                if (el) { if (left > 0) { el.style.display='block'; el.textContent = left + '秒'; } else { el.style.display='none'; } }
+              }
+            }
+          } catch(_) {} });
         } catch(_) {}
       })();
 

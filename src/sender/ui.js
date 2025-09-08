@@ -104,9 +104,15 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
       if (transport?.wsSend && transport.wsReady) {
         console.log('[sender] sending overlayStart via WS');
         transport.wsSend({ type: 'overlayStart' });
+        // 互換性のためconfigでもキックを送る
+        const kick = { type: 'config', data: { overlayKick: Date.now() } };
+        transport.wsSend(kick);
       } else {
         console.log('[sender] sending overlayStart via HTTP fallback');
         transport?.httpPost?.('/overlay', {});
+        // config経由のフォールバック
+        const httpBase = transport?.toHttpBase?.(transport?.serverUrl || '') || '';
+        try { fetch(`${httpBase}/config?channel=${encodeURIComponent(transport?.channel||'default')}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: { overlayKick: Date.now() } }) }).catch(()=>{}); } catch(_) {}
       }
     } catch(_) {}
   });

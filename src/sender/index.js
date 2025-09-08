@@ -32,6 +32,18 @@ transport.onmessage = (msg) => {
       if (typeof msg.data.bgSender === 'string') { cm.setBackgroundWhite(); }
       else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) { cm.setBackgroundImage(msg.data.bgSender.url); }
     }
+    // Overlay countdown relay for senders
+    if (typeof msg.data.overlayRemainSec !== 'undefined') {
+      const left = Math.max(0, Math.floor(Number(msg.data.overlayRemainSec)||0));
+      let el = document.getElementById('senderCountdown');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'senderCountdown';
+        el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:24px;color:#fff;text-shadow:0 0 6px #3b82f6,0 0 12px #3b82f6,0 0 18px #3b82f6;pointer-events:none;';
+        el.textContent = '終了まで0秒'; document.body.appendChild(el);
+      }
+      if (left > 0) { el.style.display = 'block'; el.textContent = `終了まで${left}秒`; }
+      else { el.style.display = 'none'; }
+    }
   }
   if (msg.type === 'stroke') {
     // authorId が無い古いクライアントも“他人”として表示する

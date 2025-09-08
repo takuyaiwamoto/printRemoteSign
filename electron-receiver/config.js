@@ -14,6 +14,7 @@
   let printDelaySec = 0; // seconds (0-15)
   let rotateDegState = 180; // track latest applied rotation (0 or 180)
   let printRotate180 = null; // explicit print rotation override (null=follow screen rotation)
+  let overlayStaySec = 5; // seconds the image stays up before coming back
   let lastAnimKick = 0;
   let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -102,6 +103,11 @@
       if (Object.prototype.hasOwnProperty.call(data.print, 'rotate180')) printRotate180 = !!data.print.rotate180;
       log('print config', { printDelaySec, printRotate180 });
     }
+    if (typeof data.overlayStaySec !== 'undefined') {
+      const s = Number(data.overlayStaySec);
+      if (isFinite(s)) overlayStaySec = Math.max(1, Math.min(60, Math.round(s)));
+      log('overlay stay sec', overlayStaySec);
+    }
     if (typeof data.animType === 'string') {
       animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
       log('anim type', animType);
@@ -133,6 +139,7 @@
   function getPrintDelaySec() { return printDelaySec; }
   function getRotateDeg() { return rotateDegState; }
   function getPrintRotate180() { return printRotate180; }
+  function getOverlayStaySec() { return overlayStaySec; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg, getPrintRotate180 };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg, getPrintRotate180, getOverlayStaySec };
 })();

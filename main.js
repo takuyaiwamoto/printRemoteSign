@@ -22,6 +22,7 @@
   const clearAllBtn = document.getElementById('btn-clear-all');
   const eraserBtn = document.getElementById('btn-eraser');
   const sendBtn = document.getElementById('btn-send');
+  const overlayStartBtn = document.getElementById('btn-overlay-start');
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearSideBtn = document.getElementById('btn-clear');
@@ -512,6 +513,22 @@
         fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: data.data }) }).catch(()=>{});
       }
     } catch(_) {}
+  });
+
+  // ---- Overlay start trigger (for overlay window) ----
+  overlayStartBtn?.addEventListener('click', () => {
+    try { console.log('[sender(main)] overlay start button clicked'); } catch(_) {}
+    if (wsReady) {
+      try { console.log('[sender(main)] sending overlayStart via WS'); ws.send(JSON.stringify({ type: 'overlayStart' })); } catch (_) {}
+      // 互換性のため config でもキックを送る
+      try { ws.send(JSON.stringify({ type:'config', data:{ overlayKick: Date.now() } })); } catch(_) {}
+    } else if (httpFallback && SERVER_URL) {
+      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      try { console.log('[sender(main)] sending overlayStart via HTTP fallback'); } catch(_) {}
+      fetch(`${httpBase.replace(/\/$/, '')}/overlay?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+      // config経由のフォールバック
+      fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: { overlayKick: Date.now() } }) }).catch(()=>{});
+    }
   });
 
   eraserBtn?.addEventListener('click', () => {

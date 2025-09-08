@@ -41,7 +41,15 @@
       es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); onStroke && onStroke(m); } catch(_) {} });
       es.addEventListener('clear', () => { onClear && onClear(); });
       es.addEventListener('sendAnimation', () => { try { console.log('[receiver] SSE sendAnimation (event)'); } catch(_) {}; onAction && onAction('sendAnimation'); });
-      es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onConfig && onConfig(j.data); } catch(_) {} });
+      es.addEventListener('config', (ev) => {
+        try {
+          const j = JSON.parse(ev.data);
+          if (j && j.data) {
+            onConfig && onConfig(j.data);
+            if (Object.prototype.hasOwnProperty.call(j.data, 'overlayKick')) { try { console.log('[receiver] SSE overlayKick'); } catch(_) {}; onAction && onAction('overlayStart'); }
+          }
+        } catch(_) {}
+      });
       es.addEventListener('overlayStart', () => { try { console.log('[receiver] SSE overlayStart (event)'); } catch(_) {}; onAction && onAction('overlayStart'); });
       es.onerror = () => { /* auto retry; keep polling too */ };
     }
@@ -89,7 +97,7 @@
         if (msg.type === 'clear') { onClear && onClear(); return; }
         if (msg.type === 'sendAnimation') { try { console.log('[receiver] WS sendAnimation (message)'); } catch(_) {}; onAction && onAction('sendAnimation'); return; }
         if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
-        if (msg.type === 'config' && msg.data) { try { console.log('[receiver] WS config'); } catch(_) {}; onConfig && onConfig(msg.data); return; }
+        if (msg.type === 'config' && msg.data) { try { console.log('[receiver] WS config'); } catch(_) {}; onConfig && onConfig(msg.data); if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayKick')) { try { console.log('[receiver] WS overlayKick'); } catch(_) {}; onAction && onAction('overlayStart'); } return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
         if (msg.type === 'overlayStart') { try { console.log('[receiver] WS overlayStart (message)'); } catch(_) {}; onAction && onAction('overlayStart'); return; }
       };

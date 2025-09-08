@@ -335,6 +335,7 @@
       if (type === 'overlayStart') {
         try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
         try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
+        setTimeout(() => { startOverlayCountdown(); }, 3000);
       }
     },
     setStatus: (t) => setStatus(t),
@@ -342,6 +343,38 @@
     log: (...a) => log(...a)
   });
   net?.start?.();
+
+  // ---- Overlay countdown broadcast (starts after image moves up) ----
+  let overlayCountdownTimer = null;
+  let overlayCountdownT0 = 0;
+  function stopOverlayCountdown(){ if (overlayCountdownTimer) { clearInterval(overlayCountdownTimer); overlayCountdownTimer = null; } }
+  function publishOverlayRemain(sec){
+    try {
+      const recvCd = document.getElementById('recvCountdown');
+      if (recvCd) {
+        if (sec > 0) { recvCd.style.display = 'block'; recvCd.textContent = `${sec}秒`; }
+        else { recvCd.style.display = 'none'; }
+      }
+      const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+        .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+      const data = { overlayRemainSec: Math.max(0, Math.floor(sec)) };
+      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
+        { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+    } catch(_) {}
+  }
+  function startOverlayCountdown(){
+    stopOverlayCountdown();
+    const staySec = Number(window.ReceiverConfig?.getOverlayStaySec?.() || 5);
+    let remain = Math.max(1, Math.floor(staySec));
+    publishOverlayRemain(remain);
+    overlayCountdownT0 = Date.now();
+    overlayCountdownTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - overlayCountdownT0) / 1000);
+      const left = Math.max(0, remain - elapsed);
+      publishOverlayRemain(left);
+      if (left <= 0) stopOverlayCountdown();
+    }, 1000);
+  }
 
   // ---- Send animation handling ----
   let animRunning = false;
