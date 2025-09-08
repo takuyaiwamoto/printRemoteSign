@@ -352,7 +352,8 @@
 
   function doPrintInk(){
     try {
-      const rotateDeg = Number(window.ReceiverConfig?.getRotateDeg?.() || 0);
+      const forced180 = !!window.ReceiverConfig?.getPrintRotate180?.();
+      const rotateDeg = forced180 ? 180 : Number(window.ReceiverConfig?.getRotateDeg?.() || 0);
       const src = inkCanvas; if (!src) return;
       const w = src.width, h = src.height;
       const off = document.createElement('canvas');
@@ -360,7 +361,7 @@
       if (rotateDeg === 180) { off.width = w; off.height = h; const g = off.getContext('2d'); g.translate(w, h); g.rotate(Math.PI); g.drawImage(src, 0, 0); }
       else { off.width = w; off.height = h; off.getContext('2d').drawImage(src, 0, 0); }
       const dataURL = off.toDataURL('image/png');
-      try { console.log('[receiver] prepared PNG length=', dataURL?.length||0, 'rotateDeg=', rotateDeg); } catch(_) {}
+      try { console.log('[receiver] prepared PNG length=', dataURL?.length||0, 'rotateDeg=', rotateDeg, 'forced180=', forced180); } catch(_) {}
       if (typeof window.PrintBridge?.printInk === 'function') {
         window.PrintBridge.printInk({ dataURL });
       } else {

@@ -13,6 +13,7 @@
   let animReappearDelaySec = null; // null=use built-in defaults per animation
   let printDelaySec = 0; // seconds (0-15)
   let rotateDegState = 180; // track latest applied rotation (0 or 180)
+  let printRotate180 = false; // explicit print rotation override
   let lastAnimKick = 0;
   let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -98,7 +99,8 @@
     if (data.print && typeof data.print === 'object') {
       const p = Number(data.print.delaySec);
       if (isFinite(p)) printDelaySec = Math.max(0, Math.min(15, Math.round(p)));
-      log('print config', { printDelaySec });
+      if (Object.prototype.hasOwnProperty.call(data.print, 'rotate180')) printRotate180 = !!data.print.rotate180;
+      log('print config', { printDelaySec, printRotate180 });
     }
     if (typeof data.animType === 'string') {
       animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
@@ -130,6 +132,7 @@
   function getAnimReappearDelaySec() { return animReappearDelaySec; }
   function getPrintDelaySec() { return printDelaySec; }
   function getRotateDeg() { return rotateDegState; }
+  function getPrintRotate180() { return printRotate180; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg, getPrintRotate180 };
 })();

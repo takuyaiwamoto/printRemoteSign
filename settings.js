@@ -66,6 +66,14 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
 
+  function sendPrintRotate180(on){
+    const data = { print: { rotate180: !!on } };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+
   function sendAnimReappearDelay(sec){
     const v = Number(sec);
     const data = { animReceiver: { reappearDelaySec: isFinite(v) ? Math.max(0, Math.min(20, Math.round(v))) : null } };
@@ -144,6 +152,7 @@
   const animRV = document.getElementById('animDelayReappearVal');
   const printDelay = document.getElementById('printDelaySec');
   const printDelayVal = document.getElementById('printDelayVal');
+  const printRotate180 = document.getElementById('printRotate180');
   let atimer = null;
   function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
   animX?.addEventListener('input', ()=>{ animXV.textContent = animX.value; pushAnim(); });
@@ -160,6 +169,10 @@
     printDelayVal.textContent = printDelay.value;
     clearTimeout(ptimer);
     ptimer = setTimeout(()=> sendPrintDelay(printDelay.value), 150);
+  });
+
+  printRotate180?.addEventListener('change', ()=>{
+    sendPrintRotate180(printRotate180.checked);
   });
 
   // Audio volume for animation B
