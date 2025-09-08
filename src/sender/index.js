@@ -3,7 +3,7 @@ import { CanvasManager } from './canvas.js';
 import { wireUI } from './ui.js';
 
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.8.8';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.0';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 const qs = new URLSearchParams(location.search);
