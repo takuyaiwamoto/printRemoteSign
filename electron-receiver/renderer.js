@@ -323,6 +323,7 @@
     onConfig: (d) => applyConfig(d),
     // Animation/Print triggers from sender
     onAction: (type) => {
+      try { console.log('[receiver] onAction', type); } catch(_) {}
       if (type === 'sendAnimation') {
         tryStartAnimation();
         trySchedulePrint();
@@ -341,11 +342,11 @@
   let animRunning = false;
   let printingScheduled = false;
   function trySchedulePrint(){
-    if (printingScheduled) return;
-    printingScheduled = true;
+    if (printingScheduled) { try { console.log('[receiver] print already scheduled'); } catch(_) {} return; }
+    printingScheduled = true; try { console.log('[receiver] scheduling print'); } catch(_) {}
     const delaySec = Number(window.ReceiverConfig?.getPrintDelaySec?.() || 0);
     const delayMs = Math.max(0, Math.min(15, Math.round(delaySec))) * 1000;
-    setTimeout(()=>{ doPrintInk(); printingScheduled = false; }, delayMs);
+    setTimeout(()=>{ try { console.log('[receiver] print firing (delayMs=', delayMs, ')'); } catch(_) {} doPrintInk(); printingScheduled = false; }, delayMs);
   }
 
   function doPrintInk(){
@@ -358,7 +359,12 @@
       if (rotateDeg === 180) { off.width = w; off.height = h; const g = off.getContext('2d'); g.translate(w, h); g.rotate(Math.PI); g.drawImage(src, 0, 0); }
       else { off.width = w; off.height = h; off.getContext('2d').drawImage(src, 0, 0); }
       const dataURL = off.toDataURL('image/png');
-      window.PrintBridge?.printInk?.({ dataURL });
+      try { console.log('[receiver] prepared PNG length=', dataURL?.length||0, 'rotateDeg=', rotateDeg); } catch(_) {}
+      if (typeof window.PrintBridge?.printInk === 'function') {
+        window.PrintBridge.printInk({ dataURL });
+      } else {
+        console.error('[receiver] PrintBridge not available');
+      }
     } catch(_) {}
   }
   function tryStartAnimation(){

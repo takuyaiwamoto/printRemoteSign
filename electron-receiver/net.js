@@ -40,7 +40,7 @@
       es.addEventListener('frame', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onFrame && onFrame(j.data); } catch(_) {} });
       es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); onStroke && onStroke(m); } catch(_) {} });
       es.addEventListener('clear', () => { onClear && onClear(); });
-      es.addEventListener('sendAnimation', () => { try { console.log('[receiver] SSE sendAnimation'); } catch(_) {}; onAction && onAction('sendAnimation'); });
+      es.addEventListener('sendAnimation', () => { try { console.log('[receiver] SSE sendAnimation (event)'); } catch(_) {}; onAction && onAction('sendAnimation'); });
       es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onConfig && onConfig(j.data); } catch(_) {} });
       es.onerror = () => { /* auto retry; keep polling too */ };
     }
@@ -72,7 +72,7 @@
       ws.binaryType = 'arraybuffer';
       setStatus && setStatus('接続中…');
 
-      ws.onopen = () => { wsOpen = true; setStatus && setStatus('受信待機'); stopHttpPolling(); stopSSE(); stopConfigPolling(); };
+      ws.onopen = () => { wsOpen = true; try { console.log('[receiver] WS open'); } catch(_) {}; setStatus && setStatus('受信待機'); stopHttpPolling(); stopSSE(); stopConfigPolling(); };
       ws.onclose = () => {
         wsOpen = false;
         setStatus && setStatus('切断、再接続待ち…');
@@ -86,10 +86,9 @@
         if (msg.type === 'hello') { setInfo && setInfo('接続済み'); return; }
         if (msg.type === 'frame' && typeof msg.data === 'string') { onFrame && onFrame(msg.data); return; }
         if (msg.type === 'clear') { onClear && onClear(); return; }
-        if (msg.type === 'sendAnimation') { onAction && onAction('sendAnimation'); return; }
+        if (msg.type === 'sendAnimation') { try { console.log('[receiver] WS sendAnimation (message)'); } catch(_) {}; onAction && onAction('sendAnimation'); return; }
         if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
         if (msg.type === 'config' && msg.data) { try { console.log('[receiver] WS config'); } catch(_) {}; onConfig && onConfig(msg.data); return; }
-        if (msg.type === 'sendAnimation') { try { console.log('[receiver] WS sendAnimation'); } catch(_) {}; onAction && onAction('sendAnimation'); return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
       };
     }

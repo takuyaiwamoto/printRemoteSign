@@ -70,18 +70,29 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
 
   // Send animation trigger to receivers (uses current channel config for delays)
   sendBtn?.addEventListener('click', () => {
+    try { console.log('[sender] send button clicked'); } catch(_) {}
     // ignore rapid re-clicks; simple disabled toggle
     if (sendBtn.disabled) return;
     sendBtn.disabled = true;
     const enableLater = () => { sendBtn.disabled = false; };
     setTimeout(enableLater, 8000); // animation window; receivers also gate
     try {
-      if (transport?.wsSend && transport.wsReady) transport.wsSend({ type: 'sendAnimation' });
-      else transport?.httpPost?.('/anim', {});
+      if (transport?.wsSend && transport.wsReady) {
+        console.log('[sender] sending sendAnimation via WS');
+        transport.wsSend({ type: 'sendAnimation' });
+      } else {
+        console.log('[sender] sending sendAnimation via HTTP fallback');
+        transport?.httpPost?.('/anim', {});
+      }
       // Also broadcast via config (compatible with older servers)
       const kick = { type: 'config', data: { animKick: Date.now() } };
-      if (transport?.wsSend && transport.wsReady) transport.wsSend(kick);
-      else transport?.httpPost?.('/config', kick);
+      if (transport?.wsSend && transport.wsReady) {
+        console.log('[sender] sending animKick via WS');
+        transport.wsSend(kick);
+      } else {
+        console.log('[sender] sending animKick via HTTP fallback');
+        transport?.httpPost?.('/config', kick);
+      }
     } catch(_) {}
   });
 

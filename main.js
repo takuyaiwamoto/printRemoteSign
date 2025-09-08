@@ -494,18 +494,21 @@
 
   // ---- Send animation trigger (broadcast to receivers) ----
   sendBtn?.addEventListener('click', () => {
+    try { console.log('[sender(main)] send button clicked'); } catch(_) {}
     if (wsReady) {
-      try { ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
+      try { console.log('[sender(main)] sending sendAnimation via WS'); ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
       const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+      try { console.log('[sender(main)] sending sendAnimation via HTTP fallback'); } catch(_) {}
       fetch(`${httpBase.replace(/\/$/, '')}/anim?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
     // Also send as config (for older server compatibility)
     try {
       const data = { type:'config', data:{ animKick: Date.now() } };
-      if (wsReady) ws.send(JSON.stringify(data));
+      if (wsReady) { try { console.log('[sender(main)] sending animKick via WS'); } catch(_) {}; ws.send(JSON.stringify(data)); }
       else if (httpFallback && SERVER_URL) {
         const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
+        try { console.log('[sender(main)] sending animKick via HTTP fallback'); } catch(_) {}
         fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: data.data }) }).catch(()=>{});
       }
     } catch(_) {}

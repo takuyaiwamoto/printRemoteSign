@@ -46,7 +46,8 @@ app.on('window-all-closed', () => {
 // Printing pipeline: receive PNG dataURL and print silently to the target device
 ipcMain.on('print-ink', async (ev, payload) => {
   try {
-    const deviceName = 'Brother_MFC_J6983CDW';
+    const targetName = 'Brother_MFC_J6983CDW';
+    console.log('[print] received job payload bytes=', (payload?.dataURL||'').length);
     // Hidden window to render the image for printing
     const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
     const html = `<!doctype html><html><head><meta charset='utf-8'><style>
@@ -57,18 +58,31 @@ ipcMain.on('print-ink', async (ev, payload) => {
     </style></head><body><div class='wrap'><img id='p' src='${payload?.dataURL || ''}'/></div></body></html>`;
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     // Give the image a moment to load in renderer
-    setTimeout(() => {
-      win.webContents.print({
-        silent: true,
-        deviceName,
-        printBackground: true,
-        margins: { marginType: 'none' },
-        pageSize: { width: 100000, height: 148000 }, // Postcard 100x148mm in microns
-        landscape: false,
-      }, (success, errorType) => {
+    setTimeout(async () => {
+      try {
+        const printers = await win.webContents.getPrintersAsync();
+        console.log('[print] available printers:', printers.map(p=>p.name));
+        const found = printers.find(p => (p.name === targetName) || (p.displayName === targetName));
+        const alt = printers.find(p => p.name?.includes('Brother') || p.displayName?.includes('Brother'));
+        const deviceName = found?.name || alt?.name;
+        if (!deviceName) console.warn('[print] target printer not found; using system default');
+        else console.log('[print] using printer:', deviceName);
+        win.webContents.print({
+          silent: true,
+          deviceName,
+          printBackground: true,
+          margins: { marginType: 'none' },
+          pageSize: { width: 100000, height: 148000 }, // Postcard 100x148mm in microns
+          landscape: false,
+        }, (success, errorType) => {
+          try { win.close(); } catch(_) {}
+          if (!success) console.error('print failed', errorType);
+          else console.log('[print] job submitted');
+        });
+      } catch (e) {
         try { win.close(); } catch(_) {}
-        if (!success) console.error('print failed', errorType);
-      });
+        console.error('print error', e);
+      }
     }, 300);
   } catch (e) {
     console.error('print-ink error', e);
