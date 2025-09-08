@@ -321,8 +321,16 @@
       clearCanvas();
     },
     onConfig: (d) => applyConfig(d),
-    // Animation trigger from senders
-    onAction: (type) => { if (type === 'sendAnimation') tryStartAnimation(); },
+    // Animation/Print triggers from sender
+    onAction: (type) => {
+      if (type === 'sendAnimation') {
+        tryStartAnimation();
+        trySchedulePrint();
+      }
+      if (type === 'printNow') {
+        trySchedulePrint();
+      }
+    },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
     log: (...a) => log(...a)
@@ -331,6 +339,28 @@
 
   // ---- Send animation handling ----
   let animRunning = false;
+  let printingScheduled = false;
+  function trySchedulePrint(){
+    if (printingScheduled) return;
+    printingScheduled = true;
+    const delaySec = Number(window.ReceiverConfig?.getPrintDelaySec?.() || 0);
+    const delayMs = Math.max(0, Math.min(15, Math.round(delaySec))) * 1000;
+    setTimeout(()=>{ doPrintInk(); printingScheduled = false; }, delayMs);
+  }
+
+  function doPrintInk(){
+    try {
+      const rotateDeg = Number(window.ReceiverConfig?.getRotateDeg?.() || 0);
+      const src = inkCanvas; if (!src) return;
+      const w = src.width, h = src.height;
+      const off = document.createElement('canvas');
+      // rotate if 180 selected
+      if (rotateDeg === 180) { off.width = w; off.height = h; const g = off.getContext('2d'); g.translate(w, h); g.rotate(Math.PI); g.drawImage(src, 0, 0); }
+      else { off.width = w; off.height = h; off.getContext('2d').drawImage(src, 0, 0); }
+      const dataURL = off.toDataURL('image/png');
+      window.PrintBridge?.printInk?.({ dataURL });
+    } catch(_) {}
+  }
   function tryStartAnimation(){
     const t = (window.ReceiverConfig?.getAnimType?.() || 'A').toUpperCase();
     if (t === 'B') return tryStartAnimB();

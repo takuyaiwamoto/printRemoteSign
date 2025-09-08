@@ -57,6 +57,15 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
 
+  function sendPrintDelay(sec){
+    const v = Math.max(0, Math.min(15, Math.round(Number(sec)||0)));
+    const data = { print: { delaySec: v } };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+
   function sendAnimReappearDelay(sec){
     const v = Number(sec);
     const data = { animReceiver: { reappearDelaySec: isFinite(v) ? Math.max(0, Math.min(20, Math.round(v))) : null } };
@@ -133,6 +142,8 @@
   const animZV = document.getElementById('animDelayMoveVal');
   const animR = document.getElementById('animDelayReappear');
   const animRV = document.getElementById('animDelayReappearVal');
+  const printDelay = document.getElementById('printDelaySec');
+  const printDelayVal = document.getElementById('printDelayVal');
   let atimer = null;
   function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
   animX?.addEventListener('input', ()=>{ animXV.textContent = animX.value; pushAnim(); });
@@ -142,6 +153,13 @@
     animRV.textContent = (animR.value === '' ? '既定' : animR.value);
     clearTimeout(rtimer);
     rtimer = setTimeout(()=> sendAnimReappearDelay(animR.value), 150);
+  });
+
+  let ptimer = null;
+  printDelay?.addEventListener('input', ()=>{
+    printDelayVal.textContent = printDelay.value;
+    clearTimeout(ptimer);
+    ptimer = setTimeout(()=> sendPrintDelay(printDelay.value), 150);
   });
 
   // Audio volume for animation B

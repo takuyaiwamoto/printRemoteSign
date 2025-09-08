@@ -11,6 +11,8 @@
   let animType = 'B';
   let animAudioVol = 30; // percent
   let animReappearDelaySec = null; // null=use built-in defaults per animation
+  let printDelaySec = 0; // seconds (0-15)
+  let rotateDegState = 180; // track latest applied rotation (0 or 180)
   let lastAnimKick = 0;
   let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -80,7 +82,7 @@
       }
     }
     if (typeof data.scaleReceiver === 'number') { const v = Math.max(1, Math.min(100, Math.round(Number(data.scaleReceiver) || 100))); onScale && onScale(v); }
-    if (typeof data.rotateReceiver !== 'undefined') { const val = Number(data.rotateReceiver); onRotate && onRotate(val === 180 ? 180 : 0); }
+    if (typeof data.rotateReceiver !== 'undefined') { const val = Number(data.rotateReceiver); const deg = (val === 180) ? 180 : 0; rotateDegState = deg; onRotate && onRotate(deg); }
     if (data.animReceiver && typeof data.animReceiver === 'object') {
       const x = Number(data.animReceiver.rotateDelaySec); const z = Number(data.animReceiver.moveDelaySec);
       if (isFinite(x)) animRotateDelaySec = Math.max(0, Math.min(10, Math.round(x)));
@@ -92,6 +94,11 @@
         }
       }
       log('anim config', { animRotateDelaySec, animMoveDelaySec, animReappearDelaySec });
+    }
+    if (data.print && typeof data.print === 'object') {
+      const p = Number(data.print.delaySec);
+      if (isFinite(p)) printDelaySec = Math.max(0, Math.min(15, Math.round(p)));
+      log('print config', { printDelaySec });
     }
     if (typeof data.animType === 'string') {
       animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
@@ -120,6 +127,8 @@
   function getAnimType() { return animType; }
   function getAnimAudioVol() { return animAudioVol; }
   function getAnimReappearDelaySec() { return animReappearDelaySec; }
+  function getPrintDelaySec() { return printDelaySec; }
+  function getRotateDeg() { return rotateDegState; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg };
 })();
