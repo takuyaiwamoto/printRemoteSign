@@ -114,7 +114,7 @@ app.on('window-all-closed', () => {
 // Printing pipeline: receive PNG dataURL and print silently to the target device
 ipcMain.on('print-ink', async (ev, payload) => {
   try {
-    const targetName = 'Brother_MFC_J6983CDW_2';
+    const targetName = 'Brother_MFC_J6983CDW';
     console.log('[print] received job payload bytes=', (payload?.dataURL||'').length);
     // Hidden window to render the image for printing
     const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
