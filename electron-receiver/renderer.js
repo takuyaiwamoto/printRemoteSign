@@ -406,24 +406,36 @@
     const moveDur = 1500;   // 1.5s
 
     const audioVol = Math.max(0, Math.min(100, Number(window.ReceiverConfig?.getAnimAudioVol?.()||70)))/100;
+    // Prefer paths relative to receiver.html
     const videoCandidates = [
-      'electron-receiver/assets/backVideo1.mp4',
-      'assets/backVideo1.mp4',
+      'assets/backVideo1.mp4', '../assets/backVideo1.mp4',
       'backVideo1.mp4', '../backVideo1.mp4'
     ];
     const audioCandidates = [
-      'electron-receiver/assets/signMusic.mp3',
-      'assets/signMusic.mp3',
+      'assets/signMusic.mp3', '../assets/signMusic.mp3',
       'signMusic.mp3', '../signMusic.mp3'
     ];
 
     let videoEl = document.createElement('video'); videoEl.muted = false; videoEl.playsInline = true; videoEl.preload = 'auto';
     let audioEl = document.createElement('audio'); audioEl.volume = audioVol; audioEl.preload = 'auto';
 
-    function selectSrc(el, list){ return new Promise((res,rej)=>{
-      let i=0; const tryNext=()=>{ if(i>=list.length) return rej(new Error('no_source')); el.src=list[i++]; el.load(); setTimeout(()=>res(true),0); };
-      tryNext();
-    }); }
+    // Try candidates until metadata loads (robust for file://)
+    function selectSrc(el, list){
+      return new Promise((res,rej)=>{
+        let i=0; const tryNext=()=>{
+          if(i>=list.length) return rej(new Error('no_source'));
+          const url=list[i++];
+          const onOk=()=>{ cleanup(); res(true); };
+          const onErr=()=>{ cleanup(); tryNext(); };
+          const onTimeout=setTimeout(()=>{ cleanup(); tryNext(); }, 2000);
+          function cleanup(){ el.removeEventListener('loadedmetadata', onOk); el.removeEventListener('error', onErr); clearTimeout(onTimeout); }
+          el.src=url; try { el.load(); } catch(_) {}
+          el.addEventListener('loadedmetadata', onOk, { once:true });
+          el.addEventListener('error', onErr, { once:true });
+        };
+        tryNext();
+      });
+    }
 
     // rotation after X sec
     setTimeout(()=>{
@@ -443,7 +455,7 @@
         let videoEnded = false; videoEl.onended = ()=>{ videoEnded = true; videoEl.pause(); };
         try { await videoEl.play().catch(()=>{}); } catch(_) {}
 
-        // fade-out ink over 1s
+        // fade-out ink over 1s, fade-in at t=10s of video
         const fadeOutStart = performance.now(); const fadeDur = 1000; let fadingOut=true; let fadingIn=false; let fadeInStart=0;
 
         function drawVideo(){
@@ -464,6 +476,8 @@
           if (videoEnded && !fadingIn){ // start fade-in once video ended
             fadingIn = true; fadeInStart = performance.now();
           }
+          // trigger fade-in when video reaches 10s or if it ended earlier
+          if (!fadingIn && (videoEl.currentTime>=10 || videoEnded)) { fadingIn=true; fadeInStart=performance.now(); }
           if (fadingIn){ const e=Math.min(1,(performance.now()-fadeInStart)/fadeDur); inkFadeAlpha = e; if(e>=1){ fadingIn=false; }
           }
           if (!videoEnded || fadingIn){ requestAnimationFrame(rafLoop); } else { inkFadeAlpha = 1; }
@@ -471,6 +485,9 @@
         // enable ink alpha modulation in composite path
         inkFadeAlpha = 1; fadeInStart = 0; fadingIn=false;
         requestAnimationFrame(rafLoop);
+
+        // fireworks with video start
+        try { startFireworks(4000); } catch(_) {}
 
         // after video ended + Z sec, start move + confetti
         const waitForEnd = setInterval(()=>{

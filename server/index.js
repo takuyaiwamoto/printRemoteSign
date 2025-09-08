@@ -41,7 +41,7 @@ wss.on('connection', (ws, req) => {
   }
   // Provide default animation type B on fresh channels
   if (!ch.config || !ch.config.animType) {
-    ch.config = { ...(ch.config||{}), animType: 'B', animAudioVol: (ch.config?.animAudioVol ?? 70) };
+    ch.config = { ...(ch.config||{}), animType: 'B', animAudioVol: (ch.config?.animAudioVol ?? 30) };
     try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch(_) {}
   }
 

@@ -9,7 +9,7 @@
   let animRotateDelaySec = 0;
   let animMoveDelaySec = 0;
   let animType = 'B';
-  let animAudioVol = 70; // percent
+  let animAudioVol = 30; // percent
 
   function init({ base, onScaleCb, onRotateCb, onKickCb, logCb }) {
     baseCanvas = base;
