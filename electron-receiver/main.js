@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -30,6 +30,45 @@ function createWindow() {
   win.loadFile('receiver.html', {
     query: { server, channel, buffer: String(bufferMs) }
   });
+
+  // Create overlay window (semi-transparent performer layer)
+  createOverlayWindow();
+}
+
+function createOverlayWindow() {
+  try {
+    const primary = screen.getPrimaryDisplay();
+    const ov = new BrowserWindow({
+      width: Math.max(600, Math.floor(primary.workArea.width * 0.6)),
+      height: Math.max(400, Math.floor(primary.workArea.height * 0.6)),
+      x: primary.workArea.x + 40,
+      y: primary.workArea.y + 40,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      resizable: true,
+      movable: true,
+      hasShadow: false,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        contextIsolation: true,
+        sandbox: true,
+        preload: path.join(__dirname, 'overlay-preload.js'),
+      },
+    });
+    ov.setMenuBarVisibility(false);
+    ov.loadFile('overlay.html');
+
+    // IPC: overlay commands
+    ipcMain.on('overlay:go-fullscreen', () => {
+      try { ov.setFullScreen(true); } catch(_) {}
+    });
+    ipcMain.on('overlay:exit-fullscreen', () => {
+      try { ov.setFullScreen(false); } catch(_) {}
+    });
+  } catch (e) {
+    console.error('[overlay] create error', e);
+  }
 }
 
 app.whenReady().then(() => {
