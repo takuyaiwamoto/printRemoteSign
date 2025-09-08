@@ -31,7 +31,7 @@
   <body>
     <div class="bar">
       <div class="btns">
-        <button id="btn-full" class="btn" title="全画面">
+        <button id="btn-full" class="btn" title="最大化">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 9V3h6"/><path d="M21 15v6h-6"/><path d="M21 9V3h-6"/><path d="M3 15v6h6"/>
           </svg>
@@ -60,6 +60,8 @@
         setAlpha(0);
         document.querySelector('.btns')?.classList.add('hidden');
         center?.classList.remove('hidden');
+        // クリック透過を有効化して下のウィンドウを操作可能に
+        setTimeout(() => { window.OverlayApi?.setPassThrough?.(true); }, 50);
       });
     </script>
   </body>

@@ -61,10 +61,20 @@ function createOverlayWindow() {
 
     // IPC: overlay commands
     ipcMain.on('overlay:go-fullscreen', () => {
-      try { ov.setFullScreen(true); } catch(_) {}
+      try {
+        // Fit to the current display's work area (maximize without true fullscreen)
+        const current = ov.getBounds();
+        const disp = screen.getDisplayMatching(current) || screen.getPrimaryDisplay();
+        const wa = disp.workArea;
+        ov.setFullScreen(false);
+        ov.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height }, true);
+      } catch(_) {}
     });
     ipcMain.on('overlay:exit-fullscreen', () => {
       try { ov.setFullScreen(false); } catch(_) {}
+    });
+    ipcMain.on('overlay:pass-through', (_ev, on) => {
+      try { ov.setIgnoreMouseEvents(!!on, { forward: true }); } catch(_) {}
     });
   } catch (e) {
     console.error('[overlay] create error', e);
