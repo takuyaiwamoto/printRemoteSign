@@ -61,6 +61,7 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'sendAnimation') {
+      try { console.log('[server] sendAnimation via WS from', role, 'channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
       const relay = JSON.stringify({ type: 'sendAnimation' });
       broadcast(ch, relay, () => true);
       broadcastSSE(ch, { type: 'sendAnimation' });

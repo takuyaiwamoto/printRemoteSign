@@ -55,7 +55,8 @@
     base: baseCanvas,
     onScaleCb: (v) => { scalePct = v; applyBoxTransform(); log('scaleReceiver applied', { v, factor: v/100 }); },
     onRotateCb: (deg) => { rotationDeg = deg === 180 ? 180 : 0; applyBoxTransform(); log('rotateReceiver applied', { rotationDeg }); },
-    onKickCb: () => { tryStartAnimation(); },
+    // When animKick config arrives, also schedule print as a fallback if sendAnimation WS isn't received
+    onKickCb: () => { try { console.log('[receiver] animKick received -> start anim + schedule print'); } catch(_) {} tryStartAnimation(); trySchedulePrint(); },
     logCb: (...a) => log(...a)
   });
 

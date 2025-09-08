@@ -86,6 +86,7 @@ function registerHttpRoutes(app) {
     const ch = getChannel(channelName);
     const msg = { type: 'sendAnimation' };
     const txt = JSON.stringify(msg);
+    try { console.log('[server] /anim trigger channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
     broadcast(ch, txt, () => true);
     broadcastSSE(ch, msg);
     res.json({ ok: true });

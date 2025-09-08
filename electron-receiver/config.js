@@ -112,13 +112,14 @@
     if (typeof data.animKick !== 'undefined') {
       const ts = Number(data.animKick) || 0;
       const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      // Fire only for strictly newer kicks and outside of boot grace period (2s)
-      if (ts > lastAnimKick && nowT - bootAt > 2000) {
+      const canFire = (nowT - bootAt > 2000);
+      if (ts > lastAnimKick && canFire) {
         lastAnimKick = ts;
+        try { console.log('[receiver] animKick accepted ts=', ts); } catch(_) {}
         try { onKick && onKick(); } catch(_) {}
       } else {
-        // update last seen without firing if older or within grace period
         if (ts > lastAnimKick) lastAnimKick = ts;
+        try { console.log('[receiver] animKick ignored (early or old)', { ts, lastAnimKick, bootDelta: Math.round(nowT - bootAt) }); } catch(_) {}
       }
     }
   }
