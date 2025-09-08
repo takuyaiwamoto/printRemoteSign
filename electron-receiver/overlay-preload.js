@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('OverlayApi', {
   setPassThrough: (on = true) => { try { ipcRenderer.send('overlay:pass-through', !!on); } catch(_) {} },
   onOverlayStart: (cb) => {
     try { ipcRenderer.on('overlay:start', (_e, type) => { if (type === 'start') try { cb && cb(); } catch(_) {} }); } catch(_) {}
+  },
+  onPreCount: (cb) => {
+    try { ipcRenderer.on('overlay:precount', () => { try { cb && cb(); } catch(_) {} }); } catch(_) {}
   }
 });

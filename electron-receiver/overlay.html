@@ -20,12 +20,20 @@
         z-index: 10;
       }
       .btns { position: absolute; right: 8px; top: 8px; display: grid; grid-auto-flow: column; gap: 8px; z-index: 11; }
-      .count { position: absolute; right: 12px; top: 10px; z-index: 12; font-size: 36px; color: #fff; text-shadow: 0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6; display:none; }
+      .count { position: absolute; right: 12px; top: 10px; z-index: 12; font-size: 44px; color: #fff; text-shadow: 0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6; display:none; }
       .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); 
              display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag; }
       .btn:hover { background: rgba(0,0,0,.35); }
       .icon { width: 16px; height: 16px; display: block; }
       .center { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9; }
+      /* Pre-count in the exact center (override top-right .count positioning) */
+      .center .count {
+        position: static; /* override absolute from .count */
+        font-size: 160px;
+        font-weight: 900;
+        letter-spacing: .05em;
+        text-shadow: 0 0 14px #3b82f6, 0 0 26px #3b82f6, 0 0 40px #3b82f6;
+      }
       .img-wrap { position: fixed; inset: 0; display: grid; place-items: center; z-index: 1; pointer-events: none; width: 100%; height: 100%; transform: translateY(0); will-change: transform; }
       .img-wrap img { width: 100%; height: 100%; object-fit: cover; }
       .move-up { transform: translateY(-120%); }
@@ -49,7 +57,10 @@
         </button>
       </div>
     </div>
-    <div id="centerLabel" class="center hidden"><div class="label">透明中</div></div>
+    <div id="centerLabel" class="center hidden">
+      <div class="label">しばらくお待ちください</div>
+      <div id="preCount" class="count hidden">3</div>
+    </div>
     <!-- waiting.png はプロジェクト直下に配置。overlay.html からは1つ上の階層を参照 -->
     <div id="imgWrap" class="img-wrap hidden"><img id="waitImg" src="../waiting.png" alt="waiting" /></div>
     <div id="ovCount" class="count">0秒</div>
@@ -58,8 +69,12 @@
       const fullBtn = document.getElementById('btn-full');
       const clearBtn = document.getElementById('btn-clear');
       const center = document.getElementById('centerLabel');
+      const preCount = document.getElementById('preCount');
+      const centerMsg = center?.querySelector('.label');
       const imgWrap = document.getElementById('imgWrap');
       const waitImg = document.getElementById('waitImg');
+      let overlayActive = false; // show top-right countdown only during active session
+      let preTimer = null;
 
       // 既定は半透明（--alpha=0.5）
       function setAlpha(a){ document.documentElement.style.setProperty('--alpha', String(a)); }
@@ -71,6 +86,8 @@
         setAlpha(0);
         document.querySelector('.btns')?.classList.add('hidden');
         center?.classList.remove('hidden');
+        // 初期状態: メッセージ表示、カウント非表示
+        try { centerMsg?.classList.remove('hidden'); preCount?.classList.add('hidden'); } catch(_) {}
         // クリック透過を有効化して下のウィンドウを操作可能に
         setTimeout(() => { window.OverlayApi?.setPassThrough?.(true); }, 50);
         // 透明時は待機画像をフルで表示
@@ -88,15 +105,21 @@
           const es = new EventSource(`${toHttp(SERVER)}/events?channel=${encodeURIComponent(CHANNEL)}`);
           es.addEventListener('overlayStart', () => {
             try { console.log('[overlay] overlayStart'); } catch(_) {}
-            // move up immediately
-            try { console.log('[overlay] moving up'); } catch(_) {}
-            imgWrap.classList.remove('hidden');
-            imgWrap.classList.add('animate');
-            requestAnimationFrame(() => {
-              imgWrap.classList.add('move-up');
-              const backMs = (window.__overlayStaySec||5) * 1000;
-              setTimeout(()=>{ try { console.log('[overlay] moving back'); } catch(_) {}; imgWrap.classList.remove('move-up'); }, backMs);
-            });
+            // show 3-2-1 countdown in center immediately
+            try {
+              // メッセージは消してカウントのみ表示（class と style の両方で確実に非表示）
+              if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display = 'none'; }
+              if (preCount) { preCount.classList.remove('hidden'); preCount.style.display = 'block'; }
+              let n = 3; if (preCount) preCount.textContent = String(n);
+              if (preTimer) { clearInterval(preTimer); preTimer = null; }
+              preTimer = setInterval(() => {
+                n -= 1;
+                if (n > 0) { preCount.textContent = String(n); }
+                else { clearInterval(preTimer); preTimer = null; preCount.classList.add('hidden'); preCount.style.display='none'; }
+              }, 1000);
+            } catch(_) {}
+            // Do NOT move here; receiver will trigger actual start via IPC after 3s
+            overlayActive = true; // enable top-right countdown display during session
           });
           es.addEventListener('config', (ev) => { try {
             const j = JSON.parse(ev.data);
@@ -105,7 +128,24 @@
               if (typeof j.data.overlayRemainSec !== 'undefined') {
                 const left = Math.max(0, Math.floor(Number(j.data.overlayRemainSec)||0));
                 const el = document.getElementById('ovCount');
-                if (el) { if (left > 0) { el.style.display='block'; el.textContent = left + '秒'; } else { el.style.display='none'; } }
+                if (el) {
+                  if (overlayActive && left > 0) { el.style.display='block'; el.textContent = left + '秒'; }
+                  else { el.style.display='none'; }
+                }
+                // When countdown hits 0, start moving back down immediately
+                if (left === 0 && imgWrap.classList.contains('move-up')) {
+                  try { console.log('[overlay] countdown zero -> moving back'); } catch(_) {}
+                  imgWrap.classList.remove('move-up');
+                  overlayActive = false;
+                  // after descent finishes (2.5s), show waiting message again
+                  setTimeout(() => {
+                    try {
+                      center.classList.remove('hidden');
+                      centerMsg && (centerMsg.classList.remove('hidden'), centerMsg.style.display='block');
+                      preCount && (preCount.classList.add('hidden'), preCount.style.display='none');
+                    } catch(_) {}
+                  }, 2500);
+                }
               }
             }
           } catch(_) {} });
@@ -116,13 +156,34 @@
       try {
         window.OverlayApi?.onOverlayStart?.(() => {
           try { console.log('[overlay] overlayStart via IPC'); } catch(_) {}
+          // Move up immediately on IPC (3s delay handled by receiver)
+          try {
+            // 確実にメッセージ非表示、カウントも消す（上昇開始時点で完了）
+            if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display = 'none'; }
+            if (preCount) { preCount.classList.add('hidden'); preCount.style.display = 'none'; if (preTimer) { clearInterval(preTimer); preTimer = null; } }
+          } catch(_) {}
           imgWrap.classList.remove('hidden');
           imgWrap.classList.add('animate');
-          requestAnimationFrame(() => {
-            imgWrap.classList.add('move-up');
-            const backMs = (window.__overlayStaySec||5) * 1000;
-            setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, backMs);
-          });
+          requestAnimationFrame(() => { imgWrap.classList.add('move-up'); });
+        });
+      } catch(_) {}
+
+      // Start central countdown via IPC (from receiver) as well
+      try {
+        window.OverlayApi?.onPreCount?.(() => {
+          try { console.log('[overlay] preCount via IPC'); } catch(_) {}
+          if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display='none'; }
+          if (preCount) {
+            preCount.classList.remove('hidden'); preCount.style.display='block';
+            let n = 3; preCount.textContent = String(n);
+            if (preTimer) { clearInterval(preTimer); preTimer = null; }
+            preTimer = setInterval(() => {
+              n -= 1;
+              if (n > 0) preCount.textContent = String(n);
+              else { clearInterval(preTimer); preTimer = null; preCount.classList.add('hidden'); preCount.style.display='none'; }
+            }, 1000);
+          }
+          overlayActive = true;
         });
       } catch(_) {}
     </script>

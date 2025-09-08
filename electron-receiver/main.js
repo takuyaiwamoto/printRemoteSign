@@ -92,6 +92,9 @@ function createOverlayWindow() {
     ipcMain.on('overlay:trigger', (_ev, type) => {
       try { overlayWin?.webContents?.send('overlay:start', type); } catch(_) {}
     });
+    ipcMain.on('overlay:precount', () => {
+      try { overlayWin?.webContents?.send('overlay:precount'); } catch(_) {}
+    });
   } catch (e) {
     console.error('[overlay] create error', e);
   }

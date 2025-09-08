@@ -334,9 +334,16 @@
       }
       if (type === 'overlayStart') {
         try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
-        try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
-        // Start countdown after it reaches the top (2.5s)
-        setTimeout(() => { startOverlayCountdown(); }, 2500);
+        if (overlayRunning) { try { console.log('[receiver] overlay already running; ignore'); } catch(_) {} return; }
+        overlayRunning = true;
+        // play audio immediately; start overlay move & countdown exactly 3s after start
+        try { playCountdownAudio(); } catch(_) {}
+        // notify overlay to show big 3-2-1 immediately
+        try { window.OverlayPreCount?.notify?.(); } catch(_) {}
+        setTimeout(() => {
+          try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
+          startOverlayCountdown();
+        }, 3000);
       }
     },
     setStatus: (t) => setStatus(t),
@@ -345,9 +352,10 @@
   });
   net?.start?.();
 
-  // ---- Overlay countdown broadcast (starts after image moves up) ----
+  // ---- Overlay countdown broadcast ----
   let overlayCountdownTimer = null;
   let overlayCountdownT0 = 0;
+  let overlayRunning = false;
   function stopOverlayCountdown(){ if (overlayCountdownTimer) { clearInterval(overlayCountdownTimer); overlayCountdownTimer = null; } }
   function publishOverlayRemain(sec){
     try {
@@ -373,8 +381,32 @@
       const elapsed = Math.floor((Date.now() - overlayCountdownT0) / 1000);
       const left = Math.max(0, remain - elapsed);
       publishOverlayRemain(left);
-      if (left <= 0) stopOverlayCountdown();
+      if (left <= 0) { stopOverlayCountdown(); overlayRunning = false; }
     }, 1000);
+  }
+
+  // ---- Countdown audio (play once per start; no loop) ----
+  let countdownAudio = null; let countdownAudioPlaying = false;
+  function playCountdownAudio(onEnded){
+    if (countdownAudioPlaying) return;
+    const candidates = [
+      'countdown.mp3', '../countdown.mp3', 'electron-receiver/countdown.mp3',
+      'file:///Users/a14881/Documents/printRemotoSign/countdown.mp3'
+    ];
+    const el = new Audio(); el.volume = 1.0; el.loop = false;
+    let i = 0;
+    const tryNext = () => {
+      if (i >= candidates.length) { try { console.warn('[receiver] countdown audio source not found'); } catch(_) {} return; }
+      const src = candidates[i++];
+      const onOk = () => { cleanup(); try { el.play().catch(()=>{}); countdownAudioPlaying = true; countdownAudio = el; el.onended = () => { countdownAudioPlaying = false; try { onEnded && onEnded(); } catch(_) {}; }; } catch(_) {} };
+      const onErr = () => { cleanup(); tryNext(); };
+      const to = setTimeout(() => { cleanup(); tryNext(); }, 1500);
+      function cleanup(){ el.removeEventListener('canplaythrough', onOk); el.removeEventListener('error', onErr); clearTimeout(to); }
+      try { el.src = src; el.load(); } catch(_) {}
+      el.addEventListener('canplaythrough', onOk, { once: true });
+      el.addEventListener('error', onErr, { once: true });
+    };
+    tryNext();
   }
 
   // ---- Send animation handling ----

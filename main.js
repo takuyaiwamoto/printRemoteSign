@@ -145,6 +145,12 @@
       try {
         const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null');
         if (msg && msg.type) slog('ws message', msg.type);
+          if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data, 'overlayRemainSec')) {
+            const left = Math.max(0, Math.floor(Number(msg.data.overlayRemainSec)||0));
+            let el = document.getElementById('senderCountdown');
+            if (!el) { el = document.createElement('div'); el.id = 'senderCountdown'; el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:44px;color:#fff;text-shadow:0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6;pointer-events:none;'; el.textContent = '終了まで0秒'; document.body.appendChild(el); }
+            if (left > 0) { el.style.display = 'block'; el.textContent = `終了まで${left}秒`; } else { el.style.display = 'none'; }
+          }
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
           if (typeof msg.data.bgSender === 'string') {
             bgMode = 'white'; bgImage = null; composeOthers();
