@@ -10,6 +10,9 @@
   let animMoveDelaySec = 0;
   let animType = 'B';
   let animAudioVol = 30; // percent
+  let animReappearDelaySec = null; // null=use built-in defaults per animation
+  let lastAnimKick = 0;
+  let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   function init({ base, onScaleCb, onRotateCb, onKickCb, logCb }) {
     baseCanvas = base;
@@ -19,6 +22,7 @@
     log = logCb || (() => {});
     // default animType if not set
     if (!animType) animType = 'B';
+    bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   }
 
   function drawBackground(ctx) {
@@ -81,7 +85,13 @@
       const x = Number(data.animReceiver.rotateDelaySec); const z = Number(data.animReceiver.moveDelaySec);
       if (isFinite(x)) animRotateDelaySec = Math.max(0, Math.min(10, Math.round(x)));
       if (isFinite(z)) animMoveDelaySec = Math.max(0, Math.min(10, Math.round(z)));
-      log('anim config', { animRotateDelaySec, animMoveDelaySec });
+      if (Object.prototype.hasOwnProperty.call(data.animReceiver, 'reappearDelaySec')) {
+        const r = (data.animReceiver.reappearDelaySec == null) ? null : Number(data.animReceiver.reappearDelaySec);
+        if (r === null || isFinite(r)) {
+          animReappearDelaySec = (r === null) ? null : Math.max(0, Math.min(20, Math.round(r)));
+        }
+      }
+      log('anim config', { animRotateDelaySec, animMoveDelaySec, animReappearDelaySec });
     }
     if (typeof data.animType === 'string') {
       animType = (String(data.animType).toUpperCase() === 'B') ? 'B' : 'A';
@@ -92,12 +102,24 @@
       animAudioVol = v;
       log('anim audio vol', animAudioVol);
     }
-    if (typeof data.animKick !== 'undefined') { try { onKick && onKick(); } catch(_) {} }
+    if (typeof data.animKick !== 'undefined') {
+      const ts = Number(data.animKick) || 0;
+      const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      // Fire only for strictly newer kicks and outside of boot grace period (2s)
+      if (ts > lastAnimKick && nowT - bootAt > 2000) {
+        lastAnimKick = ts;
+        try { onKick && onKick(); } catch(_) {}
+      } else {
+        // update last seen without firing if older or within grace period
+        if (ts > lastAnimKick) lastAnimKick = ts;
+      }
+    }
   }
 
   function getAnimDelays() { return { rotateDelaySec: animRotateDelaySec, moveDelaySec: animMoveDelaySec }; }
   function getAnimType() { return animType; }
   function getAnimAudioVol() { return animAudioVol; }
+  function getAnimReappearDelaySec() { return animReappearDelaySec; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec };
 })();

@@ -11,6 +11,7 @@
       .head { font-weight: 700; margin-bottom: 8px; }
       .choices { display: grid; grid-template-columns: repeat(2, 120px); gap: 12px; }
       .card { display: grid; gap: 6px; justify-items: center; padding: 8px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb; cursor: pointer; }
+      .card.is-active { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 2px rgba(37,99,235,.15) inset; }
       .card img { width: 100px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; }
       .card .label { font-size: 12px; color: #374151; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -38,6 +39,10 @@
             <label>移動までの遅延Z（秒 0-10）
               <input id="animDelayMove" type="range" min="0" max="10" value="0" step="1" style="width:320px;">
               <span class="muted">現在: <span id="animDelayMoveVal">0</span>s</span>
+            </label>
+            <label>再表示までの遅延（秒 0-20）
+              <input id="animDelayReappear" type="range" min="0" max="20" value="" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="animDelayReappearVal">既定</span></span>
             </label>
           </div>
         </div>
@@ -97,7 +102,7 @@
             </div>
             <div class="card" data-target="animType" data-anim="B">
               <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='280'%3E%3Crect width='100%25' height='100%25' fill='white'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='28' fill='black'%3EB%3C/text%3E%3C/svg%3E" alt="B"/>
-              <div class="label">B（準備中）</div>
+              <div class="label">B（動画）</div>
             </div>
           </div>
         </div>

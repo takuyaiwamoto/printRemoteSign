@@ -356,7 +356,7 @@
       if (rotator) rotator.style.transition = `transform ${rotateDur}ms ease`;
       rotationDeg = endDeg; applyBoxTransform();
       // Fireworks start together with rotation (confetti at move timing)
-      try { startFireworks(4000); } catch(_) {}
+      try { startFireworks(7000); } catch(_) {}
       // Step 2: after rotation done + Z sec, move down out of view
       setTimeout(() => {
         const box = canvasBox;
@@ -377,7 +377,9 @@
     }, rotateDelay);
 
     function afterMove(){
-      // After 5s, clear drawings (receiver + senders) and reappear at top 80px with rotation 180
+      // After configurable sec (default 5s), clear drawings (receiver + senders) and reappear
+      const repSec = window.ReceiverConfig?.getAnimReappearDelaySec?.();
+      const delayMs = (repSec == null) ? 5000 : Math.max(0, Math.round(Number(repSec)||0) * 1000);
       setTimeout(() => {
         // request global clear (senders + receivers)
         try {
@@ -391,7 +393,7 @@
         if (canvasBox) canvasBox.style.transform = '';
         rotationDeg = 180; applyBoxTransform();
         animRunning = false;
-      }, 5000);
+      }, delayMs);
     }
     function finish(){ animRunning = false; }
   }
@@ -416,7 +418,7 @@
       'signMusic.mp3', '../signMusic.mp3'
     ];
 
-    let videoEl = document.createElement('video'); videoEl.muted = false; videoEl.playsInline = true; videoEl.preload = 'auto';
+    let videoEl = document.createElement('video'); videoEl.muted = true; videoEl.playsInline = true; videoEl.preload = 'auto';
     let audioEl = document.createElement('audio'); audioEl.volume = audioVol; audioEl.preload = 'auto';
 
     // Try candidates until metadata loads (robust for file://)
@@ -455,8 +457,15 @@
         let videoEnded = false; videoEl.onended = ()=>{ videoEnded = true; videoEl.pause(); };
         try { await videoEl.play().catch(()=>{}); } catch(_) {}
 
-        // fade-out ink over 1s, fade-in at t=10s of video
-        const fadeOutStart = performance.now(); const fadeDur = 1000; let fadingOut=true; let fadingIn=false; let fadeInStart=0;
+        // fade-out / in control (out:2s, in:fast ~0.4s)
+        const fadeOutStart = performance.now();
+        const fadeOutDur = 2000; // 2s fade-out (spec)
+        const fadeInDur  = 400;  // faster fade-in
+        let fadingOut = true;
+        let fadingIn = false;
+        let fadeInStart = 0;
+        // Ensure fade-in is triggered only once at the earliest timing
+        let fadeInStarted = false;
 
         function drawVideo(){
           try {
@@ -472,13 +481,14 @@
           // draw current video frame
           drawVideo();
           // handle ink fade-out then fade-in after ended
-          if (fadingOut){ const e = Math.min(1,(performance.now()-fadeOutStart)/fadeDur); inkFadeAlpha = 1 - e; if(e>=1){ fadingOut=false; } }
-          if (videoEnded && !fadingIn){ // start fade-in once video ended
-            fadingIn = true; fadeInStart = performance.now();
+          if (fadingOut){ const e = Math.min(1,(performance.now()-fadeOutStart)/fadeOutDur); inkFadeAlpha = 1 - e; if(e>=1){ fadingOut=false; } }
+          // Trigger fade-in at the earliest of: video end OR reaching 10s
+          if (!fadeInStarted && (videoEnded || videoEl.currentTime >= 10)) {
+            fadingIn = true;
+            fadeInStart = performance.now();
+            fadeInStarted = true;
           }
-          // trigger fade-in when video reaches 10s or if it ended earlier
-          if (!fadingIn && (videoEl.currentTime>=10 || videoEnded)) { fadingIn=true; fadeInStart=performance.now(); }
-          if (fadingIn){ const e=Math.min(1,(performance.now()-fadeInStart)/fadeDur); inkFadeAlpha = e; if(e>=1){ fadingIn=false; }
+          if (fadingIn){ const e=Math.min(1,(performance.now()-fadeInStart)/fadeInDur); inkFadeAlpha = e; if(e>=1){ fadingIn=false; }
           }
           if (!videoEnded || fadingIn){ requestAnimationFrame(rafLoop); } else { inkFadeAlpha = 1; }
         };
@@ -487,7 +497,7 @@
         requestAnimationFrame(rafLoop);
 
         // fireworks with video start
-        try { startFireworks(4000); } catch(_) {}
+        try { startFireworks(7000); } catch(_) {}
 
         // after video ended + Z sec, start move + confetti
         const waitForEnd = setInterval(()=>{
@@ -504,6 +514,8 @@
     }, rotateDelay);
 
     function afterMove(){
+      const repSec = window.ReceiverConfig?.getAnimReappearDelaySec?.();
+      const delayMs = (repSec == null) ? 500 : Math.max(0, Math.round(Number(repSec)||0) * 1000);
       setTimeout(()=>{
         // reset: clear & transforms restore
         try {
@@ -512,13 +524,13 @@
           fetch(`${httpBase}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
         } catch(_) {}
         window.StrokeEngine?.clearAll?.(); clearCanvas(); if (rotator) rotator.style.transition=''; if (canvasBox) canvasBox.style.transform=''; rotationDeg=180; applyBoxTransform(); animRunning=false;
-      }, 500);
+      }, delayMs);
     }
   }
 
   // ---- Fireworks overlay (window-wide, 2D canvas) ----
   let fwRunning = false;
-  function startFireworks(durationMs = 4000) {
+  function startFireworks(durationMs = 7000) {
     if (fwRunning) return; fwRunning = true;
     const cv = document.createElement('canvas');
     cv.style.position = 'fixed'; cv.style.inset = '0'; cv.style.zIndex = '9999';

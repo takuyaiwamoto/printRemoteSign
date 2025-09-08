@@ -57,6 +57,15 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
 
+  function sendAnimReappearDelay(sec){
+    const v = Number(sec);
+    const data = { animReceiver: { reappearDelaySec: isFinite(v) ? Math.max(0, Math.min(20, Math.round(v))) : null } };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+
   // 画像URLの正規化
   function normalizeLocalUrl(u){
     if (!u) return u;
@@ -71,7 +80,17 @@
   document.querySelectorAll('.card').forEach(card => {
     card.addEventListener('click', () => {
       const target = card.getAttribute('data-target');
+      // Visual selection for background cards
+      if (target === 'sender' || target === 'receiver') {
+        const panel = target === 'sender' ? document.getElementById('senderPanel') : document.getElementById('receiverPanel');
+        panel?.querySelectorAll('.card').forEach(el => el.classList.remove('is-active'));
+        card.classList.add('is-active');
+      }
       if (target === 'animType') {
+        // toggle active state within animType panel
+        const panel = document.getElementById('animTypePanel');
+        panel?.querySelectorAll('.card').forEach(el => el.classList.remove('is-active'));
+        card.classList.add('is-active');
         const anim = (card.getAttribute('data-anim') || 'A').toUpperCase();
         const data = { animType: (anim === 'B') ? 'B' : 'A' };
         const msg = { type: 'config', data };
@@ -81,6 +100,10 @@
         return;
       }
       if (target === 'rotate') {
+        // toggle active state within rotate panel
+        const panel = document.getElementById('rotatePanel');
+        panel?.querySelectorAll('.card').forEach(el => el.classList.remove('is-active'));
+        card.classList.add('is-active');
         const rot = Number(card.getAttribute('data-rot') || '0');
         const data = { rotateReceiver: (rot === 180) ? 180 : 0 };
         const msg = { type: 'config', data };
@@ -108,10 +131,18 @@
   const animXV = document.getElementById('animDelayRotateVal');
   const animZ = document.getElementById('animDelayMove');
   const animZV = document.getElementById('animDelayMoveVal');
+  const animR = document.getElementById('animDelayReappear');
+  const animRV = document.getElementById('animDelayReappearVal');
   let atimer = null;
   function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
   animX?.addEventListener('input', ()=>{ animXV.textContent = animX.value; pushAnim(); });
   animZ?.addEventListener('input', ()=>{ animZV.textContent = animZ.value; pushAnim(); });
+  let rtimer = null;
+  animR?.addEventListener('input', ()=>{
+    animRV.textContent = (animR.value === '' ? '既定' : animR.value);
+    clearTimeout(rtimer);
+    rtimer = setTimeout(()=> sendAnimReappearDelay(animR.value), 150);
+  });
 
   // Audio volume for animation B
   const volEl = document.getElementById('animAudioVol');
