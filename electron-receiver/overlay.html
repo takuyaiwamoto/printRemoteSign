@@ -24,6 +24,10 @@
       .btn:hover { background: rgba(0,0,0,.35); }
       .icon { width: 16px; height: 16px; display: block; }
       .center { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
+      .img-wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+      .img-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .move-up { transform: translateY(-120%); }
+      .animate { transition: transform 800ms ease; }
       .hidden { display: none; }
       .label { font-size: 28px; font-weight: 800; letter-spacing: .1em; text-shadow: 0 2px 10px rgba(0,0,0,.35); }
     </style>
@@ -44,11 +48,14 @@
       </div>
     </div>
     <div id="centerLabel" class="center hidden"><div class="label">透明中</div></div>
+    <div id="imgWrap" class="img-wrap"><img id="waitImg" src="waiting.png" alt="waiting" /></div>
 
     <script>
       const fullBtn = document.getElementById('btn-full');
       const clearBtn = document.getElementById('btn-clear');
       const center = document.getElementById('centerLabel');
+      const imgWrap = document.getElementById('imgWrap');
+      const waitImg = document.getElementById('waitImg');
 
       // 既定は半透明（--alpha=0.5）
       function setAlpha(a){ document.documentElement.style.setProperty('--alpha', String(a)); }
@@ -62,7 +69,30 @@
         center?.classList.remove('hidden');
         // クリック透過を有効化して下のウィンドウを操作可能に
         setTimeout(() => { window.OverlayApi?.setPassThrough?.(true); }, 50);
+        // 透明時は待機画像をフルで表示
+        imgWrap.style.display = 'grid';
       });
+
+      // --- Networking: subscribe to overlayStart via SSE ---
+      (function(){
+        const qs = new URLSearchParams(location.search);
+        const SERVER = (qs.get('server')||'').trim();
+        const CHANNEL = (qs.get('channel')||'default').trim();
+        if (!SERVER) return;
+        function toHttp(u){ return u.replace(/^wss?:\/\//i, (m)=>m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,''); }
+        try {
+          const es = new EventSource(`${toHttp(SERVER)}/events?channel=${encodeURIComponent(CHANNEL)}`);
+          es.addEventListener('overlayStart', () => {
+            try { console.log('[overlay] overlayStart'); } catch(_) {}
+            // after 3s, move image up; then after 5s, move back down
+            setTimeout(()=>{
+              imgWrap.classList.add('animate');
+              imgWrap.classList.add('move-up');
+              setTimeout(()=>{ imgWrap.classList.remove('move-up'); }, 5000);
+            }, 3000);
+          });
+        } catch(_) {}
+      })();
     </script>
   </body>
   </html>

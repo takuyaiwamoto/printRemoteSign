@@ -92,6 +92,18 @@ function registerHttpRoutes(app) {
     res.json({ ok: true });
   });
 
+  // HTTP fallback for overlayStart trigger
+  app.post('/overlay', (req, res) => {
+    const channelName = req.query.channel || 'default';
+    const ch = getChannel(channelName);
+    const msg = { type: 'overlayStart' };
+    const txt = JSON.stringify(msg);
+    try { console.log('[server] /overlay trigger channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
+    broadcast(ch, txt, () => true);
+    broadcastSSE(ch, msg);
+    res.json({ ok: true });
+  });
+
   app.get('/config', (req, res) => {
     const channelName = req.query.channel || 'default';
     const ch = getChannel(channelName);

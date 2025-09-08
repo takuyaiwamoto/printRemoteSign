@@ -57,7 +57,16 @@ function createOverlayWindow() {
       },
     });
     ov.setMenuBarVisibility(false);
-    ov.loadFile('overlay.html');
+    // Pass server/channel to overlay so it can subscribe directly
+    const qs = new URLSearchParams();
+    try {
+      let fileCfg = {}; const p = path.join(__dirname, 'config.json');
+      if (fs.existsSync(p)) fileCfg = JSON.parse(fs.readFileSync(p, 'utf-8')) || {};
+      const server = process.env.SERVER_URL || fileCfg.server || 'ws://localhost:8787';
+      const channel = process.env.CHANNEL || fileCfg.channel || 'default';
+      qs.set('server', server); qs.set('channel', channel);
+    } catch(_) {}
+    ov.loadFile('overlay.html', { query: Object.fromEntries(qs) });
 
     // IPC: overlay commands
     ipcMain.on('overlay:go-fullscreen', () => {

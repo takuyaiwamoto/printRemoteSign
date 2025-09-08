@@ -5,6 +5,7 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
   const clearAllBtn = document.getElementById('btn-clear-all');
   const sendBtn = document.getElementById('btn-send');
   const clearMineBtn = document.getElementById('btn-clear-mine');
+  const overlayStartBtn = document.getElementById('btn-overlay-start');
   const sizeInput = document.getElementById('size');
   const colorInput = document.getElementById('color');
 
@@ -92,6 +93,20 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
       } else {
         console.log('[sender] sending animKick via HTTP fallback');
         transport?.httpPost?.('/config', kick);
+      }
+    } catch(_) {}
+  });
+
+  // Overlay start trigger (for performance window)
+  overlayStartBtn?.addEventListener('click', () => {
+    try { console.log('[sender] overlay start button clicked'); } catch(_) {}
+    try {
+      if (transport?.wsSend && transport.wsReady) {
+        console.log('[sender] sending overlayStart via WS');
+        transport.wsSend({ type: 'overlayStart' });
+      } else {
+        console.log('[sender] sending overlayStart via HTTP fallback');
+        transport?.httpPost?.('/overlay', {});
       }
     } catch(_) {}
   });

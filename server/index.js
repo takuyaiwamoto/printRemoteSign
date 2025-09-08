@@ -68,6 +68,14 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if (msg.type === 'overlayStart') {
+      try { console.log('[server] overlayStart via WS from', role, 'channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
+      const relay = JSON.stringify({ type: 'overlayStart' });
+      broadcast(ch, relay, () => true);
+      broadcastSSE(ch, { type: 'overlayStart' });
+      return;
+    }
+
     // Realtime stroke relay (WebSocket only). Small JSON messages.
     if (msg.type === 'stroke') {
       // Basic validation

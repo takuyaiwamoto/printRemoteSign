@@ -42,6 +42,7 @@
       es.addEventListener('clear', () => { onClear && onClear(); });
       es.addEventListener('sendAnimation', () => { try { console.log('[receiver] SSE sendAnimation (event)'); } catch(_) {}; onAction && onAction('sendAnimation'); });
       es.addEventListener('config', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onConfig && onConfig(j.data); } catch(_) {} });
+      es.addEventListener('overlayStart', () => { try { console.log('[receiver] SSE overlayStart (event)'); } catch(_) {}; onAction && onAction('overlayStart'); });
       es.onerror = () => { /* auto retry; keep polling too */ };
     }
     function stopSSE() { if (es) { try { es.close(); } catch(_) {}; es = null; } }
@@ -90,6 +91,7 @@
         if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
         if (msg.type === 'config' && msg.data) { try { console.log('[receiver] WS config'); } catch(_) {}; onConfig && onConfig(msg.data); return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
+        if (msg.type === 'overlayStart') { try { console.log('[receiver] WS overlayStart (message)'); } catch(_) {}; onAction && onAction('overlayStart'); return; }
       };
     }
 
