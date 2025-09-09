@@ -22,7 +22,7 @@ cm.fitToViewport(false);
 try { console.log('[sender(esm)] canvas size', { w: canvasEl.width, h: canvasEl.height }); } catch(_) {}
 
 // Other strokes engine draws into `othersEl` if present (overlay)
-const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: 200 }) || null);
+const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: 200, eraserScale: 3.0 }) || null);
 try { console.log('[sender(esm)] otherEngine', otherEngine ? 'ready' : 'missing'); } catch(_) {}
 function resizeLayers(){
   try {

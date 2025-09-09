@@ -5,7 +5,7 @@
   // ----- constants / debug -----
   const RATIO = SHARED_CONST?.RATIO_A4 ?? (210 / 297); // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, SHARED_CONST?.DPR_MAX ?? 3));
-  const ERASER_SCALE = SHARED_CONST?.ERASER_SCALE ?? 1.3;            // 消しゴムは常に+30%
+  const ERASER_SCALE = 3.0;            // 消しゴムはペンの3倍
   const OTHER_BUFFER_MS = SHARED_CONST?.OTHER_BUFFER_MS ?? 200;      // 他者描画のスムージング遅延
   const SEND_INTERVAL_MS = 150;        // PNG送信の間引き（通常OFF）
   const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
@@ -631,12 +631,13 @@
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       currentStrokeId = id;
       const cssW = canvas.width / DPR;
-      const sizeN = brushSizeCssPx / cssW; // キャンバス幅に対する相対太さ
+      const effectiveCss = eraserActive ? (ERASER_SCALE * brushSizeCssPx) : brushSizeCssPx;
+      const sizeN = effectiveCss / cssW; // キャンバス幅に対する相対太さ
       if (wsReady) {
-        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID, tool: (eraserActive?'eraser':'pen') })); } catch (_) {}
+        try { ws.send(JSON.stringify({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: effectiveCss, sizeN, authorId: AUTHOR_ID, tool: (eraserActive?'eraser':'pen') })); } catch (_) {}
         slog('send start', { id, author: AUTHOR_ID, nx, ny, size: brushSizeCssPx, sizeN });
       } else {
-        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: brushSizeCssPx, sizeN, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') });
+        postStroke({ type: 'stroke', phase: 'start', id, nx, ny, color: brushColor, size: effectiveCss, sizeN, authorId: AUTHOR_ID, tool:(eraserActive?'eraser':'pen') });
         slog('queue start(HTTP)', { id, author: AUTHOR_ID });
       }
       realtimeEverUsed = true;

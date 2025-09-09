@@ -27,7 +27,8 @@ export class CanvasManager {
   this.bgMode = 'white';
   this.bgImage = null;
   // tool (pen | eraser)
-  this.tool = 'pen';
+    this.tool = 'pen';
+    this.ERASER_FACTOR = 3.0; // erase at 3x current pen thickness
   }
 
   setBrushSize(px) { this.brushSizeCss = Number(px) || this.brushSizeCss; this._applyBrush(); }
@@ -38,11 +39,12 @@ export class CanvasManager {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.strokeStyle = this.brushColor;
-    ctx.lineWidth = this.brushSizeCss * this.DPR;
+    const factor = (this.tool === 'eraser') ? this.ERASER_FACTOR : 1.0;
+    ctx.lineWidth = this.brushSizeCss * factor * this.DPR;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   }
 
-  setTool(tool){ this.tool = (tool === 'eraser') ? 'eraser' : 'pen'; }
+  setTool(tool){ this.tool = (tool === 'eraser') ? 'eraser' : 'pen'; this._applyBrush(); }
   getTool(){ return this.tool; }
 
   fitToViewport(preserve = false) {
@@ -149,8 +151,9 @@ export class CanvasManager {
     this.points = [{ x, y }];
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const cssW = this.canvas.width / this.DPR; // CSSピクセル幅
-    const sizeN = this.brushSizeCss / cssW;    // キャンバス幅に対する相対太さ
-    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: this.brushSizeCss, sizeN, tool: this.tool });
+    const sizeCss = (this.tool === 'eraser') ? (this.brushSizeCss * this.ERASER_FACTOR) : this.brushSizeCss;
+    const sizeN = sizeCss / cssW;    // キャンバス幅に対する相対太さ
+    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: sizeCss, sizeN, tool: this.tool });
     this._currentId = id;
   }
 
