@@ -4,7 +4,7 @@ import { wireUI } from './ui.js';
 
 // ---- Version ----
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.1';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.2';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 // ---- Params ----
@@ -22,6 +22,7 @@ cm.fitToViewport(false);
 
 // Other strokes engine draws into `othersEl` if present (overlay)
 const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: 200 }) || null);
+try { console.log('[sender(esm)] otherEngine', otherEngine ? 'ready' : 'missing'); } catch(_) {}
 function resizeLayers(){ try { if (othersEl) { othersEl.width = canvasEl.width; othersEl.height = canvasEl.height; } otherEngine?.resizeToCanvas?.(); } catch(_) {} }
 resizeLayers();
 window.addEventListener('resize', () => cm.fitToViewport(true));
@@ -230,7 +231,12 @@ transport.onmessage = (msg) => {
         const msg = JSON.parse(ev.data);
         if (!msg || msg.type !== 'stroke') return;
         if (msg.authorId && msg.authorId === AUTHOR_ID) return;
-        try { if (msg.phase==='start' || msg.phase==='end') console.log('[sender(esm)] SSE stroke', msg.phase, { id: msg.id, author: msg.authorId }); } catch(_) {}
+        try {
+          if (msg.phase==='start' || msg.phase==='end') console.log('[sender(esm)] SSE stroke', msg.phase, { id: msg.id, author: msg.authorId });
+          else if (msg.phase==='point') {
+            window.__dbgPointC2 = (window.__dbgPointC2||0)+1; if ((window.__dbgPointC2 % 25)===0) console.log('[sender(esm)] SSE stroke point');
+          }
+        } catch(_) {}
         otherEngine?.handle?.(msg);
       } catch(_) {}
     });

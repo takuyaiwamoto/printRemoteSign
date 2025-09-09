@@ -5,7 +5,7 @@
   else { (root.SenderShared = root.SenderShared || {}).constants = factory(); }
 })(typeof self !== 'undefined' ? self : this, function(){
   return {
-    VERSION: '0.9.1',
+    VERSION: '0.9.2',
     RATIO_A4: 210/297,
     DPR_MAX: 3,
     ERASER_SCALE: 1.3,

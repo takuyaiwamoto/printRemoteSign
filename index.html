@@ -83,11 +83,29 @@
             document.head.appendChild(tag);
           })(0);
         } else {
-          var m = document.createElement('script');
-          m.type = 'module';
-          // Cache-busting to bypass CDN stale files on Pages
-          m.src = 'src/sender/index.js?v=' + (document.querySelector('meta[name=build-id]')?.content || Date.now());
-          document.head.appendChild(m);
+          // On GitHub Pages, also load UMD shared libs so window.SenderShared is available
+          var libs = [
+            'src/sender/shared/constants.js',
+            'src/sender/shared/pointer.js',
+            'src/sender/shared/layout.js',
+            'src/sender/shared/otherStrokes.js'
+          ];
+          var i = 0;
+          function loadLibs(cb){
+            if (i >= libs.length) return cb();
+            var tag = document.createElement('script');
+            tag.src = libs[i] + '?v=' + (document.querySelector('meta[name=build-id]')?.content || Date.now());
+            tag.onload = function(){ i++; loadLibs(cb); };
+            tag.onerror = function(){ i++; loadLibs(cb); };
+            document.head.appendChild(tag);
+          }
+          loadLibs(function(){
+            var m = document.createElement('script');
+            m.type = 'module';
+            // Cache-busting to bypass CDN stale files on Pages
+            m.src = 'src/sender/index.js?v=' + (document.querySelector('meta[name=build-id]')?.content || Date.now());
+            document.head.appendChild(m);
+          });
         }
       })();
     </script>
