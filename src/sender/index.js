@@ -4,7 +4,7 @@ import { wireUI } from './ui.js';
 
 // ---- Version ----
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.3';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.4';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 // ---- Params ----
@@ -422,12 +422,12 @@ function startLocalPreviewAnim(){
     inner.style.transform = 'translateY(0)';
     inner.style.transition = `transform ${rotateDur}ms ease`;
 
-    if (animType === 'B') {
-      // fade-out ink for 2s, then fade-in at earliest of video end or 10s
-      try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; } catch(_) {}
-      let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; setTimeout(()=> startMove(), moveDelay); }; } catch(_) {} }
-      const startedAt = performance.now();
-      const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; } catch(_) {} };
+  if (animType === 'B') {
+    // fade-out ink for 2s, then fade-in at earliest of video end or 10s
+    try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; console.log('[sender(esm) preview] ink fade-out start'); } catch(_) {}
+    let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; try { const d=Number(vid.duration||0); vid.pause(); if (isFinite(d) && d>0) { try { vid.currentTime = Math.max(0, d - 0.05); } catch(_) {} } console.log('[sender(esm) preview] video ended + paused at last frame', { duration: d }); } catch(_) {} try { console.log('[sender(esm) preview] schedule move(B)', { moveDelay }); } catch(_) {} setTimeout(()=> startMove(), moveDelay); }; } catch(_) {} }
+    const startedAt = performance.now();
+    const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; console.log('[sender(esm) preview] ink fade-in start'); setTimeout(()=>{ try { console.log('[sender(esm) preview] ink fade-in done'); } catch(_) {} }, 450); } catch(_) {} };
       const poll = setInterval(()=>{
         const t = performance.now();
         if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
@@ -441,9 +441,22 @@ function startLocalPreviewAnim(){
   }, rotateDelay);
 
   function startMove(){
+    try { console.log('[sender(esm) preview] move down start', { moveDur }); } catch(_) {}
     inner.style.transition = `transform ${moveDur}ms ease`;
     inner.style.transform = 'translateY(120%)';
-    setTimeout(()=>{ try { overlay.remove(); } catch(_) {} window.__senderPreviewStarted = false; }, moveDur + 30);
+    setTimeout(()=>{
+      // Global clear after move completes
+      try {
+        const httpBase = (transport?.toHttpBase?.(SERVER_URL) || SERVER_URL).replace(/^wss?:\/\//i, (m)=> m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,'');
+        const url = `${httpBase}/clear?channel=${encodeURIComponent(CHANNEL)}`;
+        console.log('[sender(esm) preview] POST /clear', url);
+        fetch(url, { method: 'POST' })
+          .then(r=>{ console.log('[sender(esm) preview] clear result', { ok: r.ok, status: r.status }); })
+          .catch(e=>{ console.warn('[sender(esm) preview] clear error', e); });
+      } catch(e) { try { console.warn('[sender(esm) preview] clear build error', e); } catch(_) {} }
+      try { overlay.remove(); console.log('[sender(esm) preview] overlay removed'); } catch(_) {}
+      window.__senderPreviewStarted = false;
+    }, moveDur + 30);
   }
     // animKick kick-off for all senders (WS broadcast)
     if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
