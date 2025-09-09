@@ -19,11 +19,18 @@ const canvasEl = document.getElementById('paint');
 const othersEl = document.getElementById('others');
 const cm = new CanvasManager(canvasEl);
 cm.fitToViewport(false);
+try { console.log('[sender(esm)] canvas size', { w: canvasEl.width, h: canvasEl.height }); } catch(_) {}
 
 // Other strokes engine draws into `othersEl` if present (overlay)
 const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: 200 }) || null);
 try { console.log('[sender(esm)] otherEngine', otherEngine ? 'ready' : 'missing'); } catch(_) {}
-function resizeLayers(){ try { if (othersEl) { othersEl.width = canvasEl.width; othersEl.height = canvasEl.height; } otherEngine?.resizeToCanvas?.(); } catch(_) {} }
+function resizeLayers(){
+  try {
+    if (othersEl) { othersEl.width = canvasEl.width; othersEl.height = canvasEl.height; }
+    otherEngine?.resizeToCanvas?.();
+    try { console.log('[sender(esm)] resizeLayers', { w: canvasEl.width, h: canvasEl.height, ow: othersEl?.width, oh: othersEl?.height }); } catch(_) {}
+  } catch(_) {}
+}
 resizeLayers();
 window.addEventListener('resize', () => cm.fitToViewport(true));
 
@@ -31,7 +38,19 @@ function compositeOthers(){
   if (othersEl){ const k = othersEl.getContext('2d'); if (!k) return; k.save(); k.setTransform(1,0,0,1,0,0); k.clearRect(0,0,othersEl.width, othersEl.height); otherEngine?.compositeTo?.(k); k.restore(); }
   else { const k = cm.ctx; k.save(); k.setTransform(1,0,0,1,0,0); otherEngine?.compositeTo?.(k); k.restore(); }
 }
-otherEngine?.startRAF?.(); (function raf(){ try { compositeOthers(); } catch(_) {} requestAnimationFrame(raf); })();
+otherEngine?.startRAF?.();
+(function raf(){
+  try { compositeOthers(); } catch(_) {}
+  // stats log every ~30 frames
+  try {
+    window.__composeTick = (window.__composeTick||0)+1;
+    if ((window.__composeTick % 30) === 0) {
+      const st = otherEngine?.getStats?.();
+      if (st) console.log('[sender(esm)] compose frame', st);
+    }
+  } catch(_) {}
+  requestAnimationFrame(raf);
+})();
 
 // ---- Networking ----
 const transport = new Transport(SERVER_URL, CHANNEL, { sendIntervalMs: 150 });
