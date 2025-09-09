@@ -293,6 +293,7 @@ function startLocalPreviewAnim(){
   // Load candidate video (same as receiver) if B
   if (animType === 'B') {
     const candidates = [
+      'electron-receiver/assets/backVideo1.mp4', '../electron-receiver/assets/backVideo1.mp4',
       'assets/backVideo1.mp4', '../assets/backVideo1.mp4', 'backVideo1.mp4', '../backVideo1.mp4',
       (window.ASSET_BASE ? (window.ASSET_BASE.replace(/\/$/,'') + '/assets/backVideo1.mp4') : '')
     ].filter(Boolean);
@@ -314,9 +315,9 @@ function startLocalPreviewAnim(){
   const moveDelay = Math.max(0, Math.min(10, Number(window.__senderAnimDelayMove||0))) * 1000;
 
   setTimeout(()=>{
-    inner.style.transform = 'rotate(0deg) translateY(0)';
+    // Sender side: do not rotate visually; just align timing
+    inner.style.transform = 'translateY(0)';
     inner.style.transition = `transform ${rotateDur}ms ease`;
-    requestAnimationFrame(()=>{ inner.style.transform = 'rotate(180deg) translateY(0)'; });
 
     if (animType === 'B') {
       // fade-out snapshot for 2s, then fade-in at earliest of video end or 10s
@@ -332,14 +333,14 @@ function startLocalPreviewAnim(){
         }
       }, 100);
     } else {
-      // A: move after rotateDur + moveDelay
+      // A: move after rotateDur + moveDelay (no rotation)
       setTimeout(()=> startMove(), rotateDur + moveDelay);
     }
   }, rotateDelay);
 
   function startMove(){
     inner.style.transition = `transform ${moveDur}ms ease`;
-    inner.style.transform = 'rotate(180deg) translateY(120%)';
+    inner.style.transform = 'translateY(120%)';
     setTimeout(()=>{ try { overlay.remove(); } catch(_) {} window.__senderPreviewStarted = false; }, moveDur + 30);
   }
 }

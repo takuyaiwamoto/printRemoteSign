@@ -156,14 +156,18 @@
     try { otherEngine?.compositeTo?.(g); } catch(_) {}
     let snapImg=document.getElementById('senderAnimSnap'); if(!snapImg){ snapImg=document.createElement('canvas'); snapImg.id='senderAnimSnap'; inner.appendChild(snapImg); }
     snapImg.width=snap.width; snapImg.height=snap.height; const sg=snapImg.getContext('2d'); sg.clearRect(0,0,snapImg.width,snapImg.height); sg.drawImage(snap,0,0);
-    snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;';
+    snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
 
     // Optional video (animType B); audio is not used
     let vid = document.getElementById('senderAnimVideo');
     if (__S_PREVIEW_ANIM_TYPE === 'B') {
       if (!vid) { vid=document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
-      vid.muted=true; vid.playsInline=true; vid.preload='auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-      const candidates=['assets/backVideo1.mp4','../assets/backVideo1.mp4','backVideo1.mp4','../backVideo1.mp4'];
+      vid.muted=true; vid.playsInline=true; vid.preload='auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+      const candidates=[
+        'electron-receiver/assets/backVideo1.mp4',
+        '../electron-receiver/assets/backVideo1.mp4',
+        'assets/backVideo1.mp4','../assets/backVideo1.mp4','backVideo1.mp4','../backVideo1.mp4'
+      ];
       (async()=>{ let ok=false; for(const url of candidates){ try{ await new Promise((res,rej)=>{ const onOk=()=>{ cleanup(); res(); }; const onErr=()=>{ cleanup(); rej(new Error('e')); }; function cleanup(){ vid.removeEventListener('loadedmetadata', onOk); vid.removeEventListener('error', onErr);} vid.addEventListener('loadedmetadata', onOk, {once:true}); vid.addEventListener('error', onErr, {once:true}); vid.src=url; vid.load(); }); ok=true; break; } catch(_){} } try{ if(ok) await vid.play().catch(()=>{});}catch(_){} })();
     } else {
       // Ensure any previous video element is hidden when animType=A
@@ -180,9 +184,9 @@
     const rotateDelay = Math.max(0, Math.min(10, Number(__S_PREVIEW_ROT_DELAY_SEC)||0)) * 1000;
     const moveDelay = Math.max(0, Math.min(10, Number(__S_PREVIEW_MOVE_DELAY_SEC)||0)) * 1000;
 
-    // Start: after rotateDelay, rotate 180deg over 1s (same as receiver)
+    // Start: after rotateDelay (sender side does not rotate visually; only timing aligns)
     setTimeout(()=>{
-      inner.style.transform='rotate(0deg) translateY(0)'; inner.style.transition=`transform ${rotateDur}ms ease`; requestAnimationFrame(()=>{ inner.style.transform='rotate(180deg) translateY(0)'; });
+      inner.style.transform='translateY(0)'; inner.style.transition=`transform ${rotateDur}ms ease`;
 
       if (__S_PREVIEW_ANIM_TYPE === 'B') {
         // B: fade-out snapshot for 2s from rotation start, then later fade-in near video end/10s
@@ -201,14 +205,14 @@
           }
         }, 100);
       } else {
-        // A: schedule move after rotation completes + moveDelay
+        // A: schedule move after rotation completes + moveDelay (no rotation on sender)
         setTimeout(()=> startMove(), rotateDur + moveDelay);
       }
     }, rotateDelay);
 
     function startMove(){
       inner.style.transition = `transform ${moveDur}ms ease`;
-      inner.style.transform = 'rotate(180deg) translateY(120%)';
+      inner.style.transform = 'translateY(120%)';
       setTimeout(()=>{ try{ overlay.remove(); }catch(_){} window.__senderPreviewStarted=false; }, moveDur + 30);
     }
   }
