@@ -150,13 +150,13 @@
     let inner = document.getElementById('senderAnimInner'); if (!inner) { inner = document.createElement('div'); inner.id='senderAnimInner'; box.appendChild(inner); }
     inner.style.cssText='position:absolute;inset:0;transform-origin:center center;';
 
-    // Snapshot current drawing (self + others)
-    const snap=document.createElement('canvas'); snap.width=canvas.width; snap.height=canvas.height; const g=snap.getContext('2d');
-    try { g.drawImage(canvas,0,0); } catch(_) {}
-    try { otherEngine?.compositeTo?.(g); } catch(_) {}
-    let snapImg=document.getElementById('senderAnimSnap'); if(!snapImg){ snapImg=document.createElement('canvas'); snapImg.id='senderAnimSnap'; inner.appendChild(snapImg); }
-    snapImg.width=snap.width; snapImg.height=snap.height; const sg=snapImg.getContext('2d'); sg.clearRect(0,0,snapImg.width,snapImg.height); sg.drawImage(snap,0,0);
-    snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
+    // Ink-only snapshot (self + others), to fade like receiver
+    const inkSnap = document.createElement('canvas'); inkSnap.width = canvas.width; inkSnap.height = canvas.height; const ig = inkSnap.getContext('2d');
+    try { ig.drawImage(selfLayer.canvas, 0, 0); } catch(_) {}
+    try { otherEngine?.compositeTo?.(ig); } catch(_) {}
+    let inkImg = document.getElementById('senderAnimInk'); if (!inkImg) { inkImg = document.createElement('canvas'); inkImg.id = 'senderAnimInk'; inner.appendChild(inkImg); }
+    inkImg.width = inkSnap.width; inkImg.height = inkSnap.height; const i2 = inkImg.getContext('2d'); i2.clearRect(0,0,inkImg.width,inkImg.height); i2.drawImage(inkSnap,0,0);
+    inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
 
     // Optional video (animType B); audio is not used
     let vid = document.getElementById('senderAnimVideo');
@@ -191,10 +191,10 @@
       if (__S_PREVIEW_ANIM_TYPE === 'B') {
         // B: fade-out snapshot for 2s from rotation start, then later fade-in near video end/10s
         // fade-out 2s
-        try { snapImg.style.transition = 'opacity 2000ms linear'; snapImg.style.opacity = '0'; } catch(_) {}
+        try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; } catch(_) {}
         let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; }; } catch(_) {} }
         // Trigger fade-in at earliest of: video end OR reaching 10s
-        const fadeIn = () => { try { snapImg.style.transition = 'opacity 400ms ease'; snapImg.style.opacity = '1'; } catch(_) {} };
+        const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; } catch(_) {} };
         const startedAt = performance.now();
         const poll = setInterval(()=>{
           const t = performance.now();

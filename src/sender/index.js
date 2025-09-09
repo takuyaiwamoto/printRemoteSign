@@ -272,19 +272,20 @@ function startLocalPreviewAnim(){
     if (!vid) { vid = document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
     vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
   } else { try { if (vid) vid.remove(); } catch(_) {} vid = null; }
-  // Snapshot current drawing (paint + others)
-  const snap = document.createElement('canvas'); snap.width = canvasEl.width; snap.height = canvasEl.height;
-  const g = snap.getContext('2d');
-  try { g.drawImage(canvasEl, 0, 0); } catch(_) {}
+  // Ink-only snapshot (self + others) — fade like receiver
+  const inkSnap = document.createElement('canvas'); inkSnap.width = canvasEl.width; inkSnap.height = canvasEl.height;
+  const g = inkSnap.getContext('2d');
+  try { g.drawImage(cm ? cm.canvas : canvasEl, 0, 0); } catch(_) {} // self layer isn't directly exposed; fallback to canvas content
+  // Prefer others overlay if available
   try {
     if (othersEl && othersEl.width>0) g.drawImage(othersEl, 0, 0);
     else otherEngine?.compositeTo?.(g);
   } catch(_) {}
-  let snapImg = document.getElementById('senderAnimSnap');
-  if (!snapImg) { snapImg = document.createElement('canvas'); snapImg.id='senderAnimSnap'; inner.appendChild(snapImg); }
-  snapImg.width = snap.width; snapImg.height = snap.height;
-  const sg = snapImg.getContext('2d'); sg.clearRect(0,0,snapImg.width,snapImg.height); sg.drawImage(snap,0,0);
-  snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;';
+  let inkImg = document.getElementById('senderAnimInk');
+  if (!inkImg) { inkImg = document.createElement('canvas'); inkImg.id='senderAnimInk'; inner.appendChild(inkImg); }
+  inkImg.width = inkSnap.width; inkImg.height = inkSnap.height;
+  const sg = inkImg.getContext('2d'); sg.clearRect(0,0,inkImg.width,inkImg.height); sg.drawImage(inkSnap,0,0);
+  inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;';
   // Clear local canvas before move (do not broadcast)
   try { cm.clear(); } catch(_) {}
   try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
@@ -320,11 +321,11 @@ function startLocalPreviewAnim(){
     inner.style.transition = `transform ${rotateDur}ms ease`;
 
     if (animType === 'B') {
-      // fade-out snapshot for 2s, then fade-in at earliest of video end or 10s
-      try { snapImg.style.transition = 'opacity 2000ms linear'; snapImg.style.opacity = '0'; } catch(_) {}
+      // fade-out ink for 2s, then fade-in at earliest of video end or 10s
+      try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; } catch(_) {}
       let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; }; } catch(_) {} }
       const startedAt = performance.now();
-      const fadeIn = () => { try { snapImg.style.transition = 'opacity 400ms ease'; snapImg.style.opacity = '1'; } catch(_) {} };
+      const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; } catch(_) {} };
       const poll = setInterval(()=>{
         const t = performance.now();
         if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
