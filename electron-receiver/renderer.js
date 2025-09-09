@@ -496,13 +496,14 @@
       if (rotator) rotator.style.transition = `transform ${rotateDur}ms ease`;
       rotationDeg = endDeg; applyBoxTransform();
       // Fireworks start together with rotation (confetti at move timing)
-      try { startFireworks(7000); } catch(_) {}
+      const fwDur = 7000; try { startFireworks(fwDur); } catch(_) {}
+      // Schedule twinkle fade-in 2s before fireworks end
+      try { if (window.ReceiverConfig?.getTwinkleStarsEnabled?.()) setTimeout(()=>{ try { startTwinkleStars({ fadeInMs: 2000 }); } catch(_) {} }, Math.max(0, fwDur - 2000)); } catch(_) {}
       // Step 2: after rotation done + Z sec, move down out of view
       setTimeout(() => {
         const box = canvasBox;
         if (!box) { finish(); return; }
-        // Start twinkle just before moving (animation A has no ink fade-in)
-        try { if (window.ReceiverConfig?.getTwinkleStarsEnabled?.()) startTwinkleStars(); } catch(_) {}
+        // Twinkle is scheduled relative to fireworks; no need to start here
         // Emit confetti right when moving starts (shorter window)
         try { startConfetti(1700); } catch(_) {}
         // animate translateY to push canvas below the window height
@@ -520,7 +521,7 @@
 
     function afterMove(){
       // Stop twinkle then, after configurable sec (default 5s), clear drawings (receiver + senders) and reappear
-      try { stopTwinkleStars(); } catch(_) {}
+      try { stopTwinkleStars({ fadeOutMs: 1200 }); } catch(_) {}
       // After configurable sec (default 5s), clear drawings (receiver + senders) and reappear
       const repSec = window.ReceiverConfig?.getAnimReappearDelaySec?.();
       const delayMs = (repSec == null) ? 5000 : Math.max(0, Math.round(Number(repSec)||0) * 1000);
@@ -646,7 +647,9 @@
         requestAnimationFrame(rafLoop);
 
         // fireworks with video start
-        try { startFireworks(7000); } catch(_) {}
+        const fwDur = 7000; try { startFireworks(fwDur); } catch(_) {}
+        // Schedule twinkle fade-in 2s before fireworks end
+        try { if (window.ReceiverConfig?.getTwinkleStarsEnabled?.()) setTimeout(()=>{ try { startTwinkleStars({ fadeInMs: 2000 }); } catch(_) {} }, Math.max(0, fwDur - 2000)); } catch(_) {}
 
         // after video ended + Z sec, start move + confetti
         const waitForEnd = setInterval(()=>{
@@ -683,36 +686,43 @@
 
   // ---- Fireworks overlay (window-wide, 2D canvas) ----
   // Twinkle stars overlay (window-wide, subtle)
-  let twRunning = false; let twCanvas = null; let twRaf = 0; let twStars = [];
-  function startTwinkleStars(){
+  let twRunning = false; let twCanvas = null; let twRaf = 0; let twStars = []; let twFade = {mode:'none', t0:0, dur:0, from:0, to:1, alpha:0};
+  function drawStarPoly(g, cx, cy, r, rot){
+    const type = (Math.random()<0.6)?'star':(Math.random()<0.5?'diamond':'plus');
+    g.save(); g.translate(cx,cy); g.rotate(rot);
+    if (type==='star'){
+      const spikes=5, outer=r, inner=r*0.45; g.beginPath();
+      for (let i=0;i<spikes*2;i++){ const rr=(i%2===0?outer:inner); const a=i*Math.PI/spikes; const x=Math.cos(a)*rr, y=Math.sin(a)*rr; if(i===0) g.moveTo(x,y); else g.lineTo(x,y);} g.closePath(); g.fill();
+    } else if (type==='diamond'){
+      g.beginPath(); g.moveTo(0,-r); g.lineTo(r*0.7,0); g.lineTo(0,r); g.lineTo(-r*0.7,0); g.closePath(); g.fill();
+    } else { g.fillRect(-r*0.12,-r,r*0.24,r*2); g.fillRect(-r,-r*0.12,r*2,r*0.24); }
+    g.restore();
+  }
+  function startTwinkleStars({ fadeInMs=2000 }={}){
     if (twRunning) return; twRunning = true;
     const cv = document.createElement('canvas'); twCanvas = cv;
-    cv.style.position='fixed'; cv.style.inset='0'; cv.style.zIndex='9998'; cv.style.pointerEvents='none';
-    document.body.appendChild(cv);
+    cv.style.position='fixed'; cv.style.inset='0'; cv.style.zIndex='9998'; cv.style.pointerEvents='none'; document.body.appendChild(cv);
     const g = cv.getContext('2d');
-    function fit(){ cv.width = Math.floor((window.innerWidth||800) * DPR); cv.height = Math.floor((window.innerHeight||600) * DPR); cv.style.width='100%'; cv.style.height='100%'; }
-    fit(); const onResize = ()=>fit(); window.addEventListener('resize', onResize);
-    const base = Math.round((cv.width*cv.height) / (180*180));
-    const count = Math.max(60, Math.min(240, base));
-    twStars = new Array(count).fill(0).map(()=>({ x: Math.random()*cv.width, y: Math.random()*cv.height, r: (Math.random()*1.6+0.6)*DPR, a0: Math.random()*Math.PI*2, w: 0.6+Math.random()*0.8, dx:(Math.random()-0.5)*0.08*DPR, dy:(Math.random()-0.5)*0.08*DPR, gold: Math.random()<0.35 }));
+    function fit(){ cv.width=Math.floor((window.innerWidth||800)*DPR); cv.height=Math.floor((window.innerHeight||600)*DPR); cv.style.width='100%'; cv.style.height='100%'; }
+    fit(); const onResize=()=>fit(); window.addEventListener('resize', onResize);
+    const base = Math.round((cv.width*cv.height)/(180*180)); const count = Math.max(80, Math.min(280, base));
+    twStars = new Array(count).fill(0).map(()=>({ x:Math.random()*cv.width, y:Math.random()*cv.height, r:(Math.random()*2.2+0.8)*DPR, a0:Math.random()*Math.PI*2, w:0.8+Math.random()*1.2, dx:(Math.random()-0.5)*0.10*DPR, dy:(Math.random()-0.5)*0.10*DPR, gold:Math.random()<0.5, rot: Math.random()*Math.PI*2 }));
+    twFade = {mode:'in', t0:performance.now(), dur:Math.max(1,fadeInMs), from:0, to:1, alpha:0};
+    function alphaNow(){ if (twFade.mode==='none') return twFade.alpha||0; const e=Math.min(1,(performance.now()-twFade.t0)/twFade.dur); const a=twFade.from+(twFade.to-twFade.from)*e; if(e>=1){ twFade.alpha=a; twFade.mode='none'; } return a; }
     function step(){
-      g.clearRect(0,0,cv.width,cv.height);
-      for (const s of twStars){
-        s.a0 += s.w*0.02; s.x += s.dx; s.y += s.dy;
-        if (s.x < -10) s.x = cv.width+10; if (s.x > cv.width+10) s.x = -10;
-        if (s.y < -10) s.y = cv.height+10; if (s.y > cv.height+10) s.y = -10;
-        const tw = 0.4 + 0.6*(0.5+0.5*Math.sin(s.a0));
-        g.globalAlpha = tw*0.9;
-        g.fillStyle = s.gold ? '#ffd97a' : '#ffffff';
-        g.beginPath(); g.arc(s.x, s.y, s.r, 0, Math.PI*2); g.fill();
-      }
-      g.globalAlpha = 1;
-      twRaf = requestAnimationFrame(step);
+      g.clearRect(0,0,cv.width,cv.height); g.globalCompositeOperation='lighter';
+      const aBase = alphaNow();
+      for (const s of twStars){ s.a0 += s.w*0.03; s.x += s.dx; s.y += s.dy; s.rot += 0.01; if(s.x<-20) s.x=cv.width+20; if(s.x>cv.width+20) s.x=-20; if(s.y<-20) s.y=cv.height+20; if(s.y>cv.height+20) s.y=-20; const tw = 0.35 + 0.75*(0.5+0.5*Math.sin(s.a0)); g.globalAlpha = aBase * tw; g.fillStyle = s.gold ? '#ffd700' : '#c0c0c0'; drawStarPoly(g, s.x, s.y, s.r, s.rot); }
+      g.globalAlpha=1; g.globalCompositeOperation='source-over'; twRaf=requestAnimationFrame(step);
     }
     twRaf = requestAnimationFrame(step);
-    startTwinkleStars._cleanup = ()=>{ try{ cancelAnimationFrame(twRaf);}catch(_){} try{window.removeEventListener('resize', onResize);}catch(_){} try{cv.remove();}catch(_){} twRunning=false; twCanvas=null; twStars=[]; };
+    startTwinkleStars._cleanup = ()=>{ try{cancelAnimationFrame(twRaf);}catch(_){} try{window.removeEventListener('resize', onResize);}catch(_){} try{cv.remove();}catch(_){} twRunning=false; twCanvas=null; twStars=[]; twFade={mode:'none',t0:0,dur:0,from:0,to:1,alpha:0}; };
   }
-  function stopTwinkleStars(){ if (!twRunning) return; try { startTwinkleStars._cleanup && startTwinkleStars._cleanup(); } catch(_) {} twRunning=false; }
+  function stopTwinkleStars({ fadeOutMs=1200 }={}){
+    if (!twRunning) return; if (!twCanvas){ try{ startTwinkleStars._cleanup && startTwinkleStars._cleanup(); }catch(_){} return; }
+    twFade = { mode:'out', t0:performance.now(), dur:Math.max(1,fadeOutMs), from:(twFade.alpha||1), to:0, alpha:(twFade.alpha||1) };
+    const prevCleanup = startTwinkleStars._cleanup; const wait=()=>{ const e=(performance.now()-twFade.t0)/twFade.dur; if(e>=1){ try{ prevCleanup && prevCleanup(); }catch(_){} } else { requestAnimationFrame(wait); } }; requestAnimationFrame(wait);
+  }
   let fwRunning = false;
   function startFireworks(durationMs = 7000) {
     if (fwRunning) return; fwRunning = true;
