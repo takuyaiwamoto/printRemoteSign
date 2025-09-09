@@ -4,7 +4,7 @@ import { wireUI } from './ui.js';
 
 // ---- Version ----
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.0';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.1';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 // ---- Params ----

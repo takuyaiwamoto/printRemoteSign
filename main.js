@@ -1,6 +1,6 @@
 (() => {
   const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-  const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.0';
+  const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.1';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
   const RATIO = SHARED_CONST?.RATIO_A4 ?? (210 / 297); // A4 縦: 幅 / 高さ（約 0.707）
