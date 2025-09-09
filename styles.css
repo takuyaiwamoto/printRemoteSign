@@ -36,11 +36,12 @@ body {
 
 .stage {
   display: grid;
-  grid-template-columns: 1fr auto; /* キャンバスを広く、右ツールを固定 */
+  /* 広画面で左カラムが余り過ぎないよう、コンテンツ幅に合わせる */
+  grid-template-columns: fit-content(1000px) auto;
   align-items: start;
   justify-content: center;
   justify-items: center;
-  gap: 12px 8px;
+  gap: 12px 8px; /* 実際の間隔はこのgapのみになる（横に余白を作らない） */
   padding: 16px;
 }
 
@@ -151,12 +152,12 @@ canvas {
 
 /* デスクトップ（広い画面）のとき: 右パネルをキャンバス寄りに、操作ボタンを中段に固定して届きやすく */
 @media (min-width: 1200px) {
-  .stage { gap: 16px 12px; }
+  .stage { gap: 16px 12px; grid-template-columns: fit-content(1000px) auto; }
   .side-tools {
     grid-template-columns: auto; /* 1列に縦積み */
     gap: 10px;
     position: sticky; top: 80px; /* 常に見える位置に固定 */
-    margin-left: -8px; /* キャンバスに少し寄せる */
+    margin-left: 0; /* キャンバスに密着（横gapのみ） */
   }
   .side-tools .group { justify-items: start; }
   .side-tools .actions {
@@ -164,7 +165,7 @@ canvas {
     gap: 10px;
     justify-content: start;
     position: sticky;
-    top: 40vh; /* 画面中段あたりに張り付く（スクロールしても近い位置） */
+    top: 38vh; /* 少しだけ上に（近く感じる調整） */
   }
   .action-btn { width: 96px; }
 }
