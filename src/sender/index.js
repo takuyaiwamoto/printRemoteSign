@@ -14,6 +14,9 @@ const canvasEl = document.getElementById('paint');
 const othersEl = document.getElementById('others');
 const cm = new CanvasManager(canvasEl);
 cm.fitToViewport(false);
+// Ensure others overlay matches initial size
+function initResize() { try { if (othersEl) { othersEl.width = canvasEl.width; othersEl.height = canvasEl.height; } resizeLayers(); } catch(_) {} }
+initResize();
 window.addEventListener('resize', () => cm.fitToViewport(true));
 
 const transport = new Transport(SERVER_URL, CHANNEL, { sendIntervalMs: 150 });

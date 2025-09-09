@@ -151,7 +151,8 @@
             const left = Math.max(0, Math.floor(Number(msg.data.overlayRemainSec)||0));
             let el = document.getElementById('senderCountdown');
             if (!el) { el = document.createElement('div'); el.id = 'senderCountdown'; el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:44px;color:#fff;text-shadow:0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6;pointer-events:none;'; el.textContent = '終了まで0秒'; document.body.appendChild(el); }
-            if (left > 0) {
+            const isWaiting = !!window.__overlayWaiting;
+            if (left > 0 && !isWaiting) {
               el.style.display = 'block'; el.textContent = `終了まで${left}秒`;
               const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
               if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
@@ -183,6 +184,10 @@
         }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountSec')) {
           const v = Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v)));
+        }
+        if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
+          window.__overlayWaiting = !!msg.data.overlayWaiting;
+          const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
         }
         // NOTE: overlayDescending is ignored for the tip. Tip is controlled only by overlayWaiting.
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
