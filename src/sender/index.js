@@ -11,6 +11,7 @@ const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
 const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
 
 const canvasEl = document.getElementById('paint');
+const othersEl = document.getElementById('others');
 const cm = new CanvasManager(canvasEl);
 cm.fitToViewport(false);
 window.addEventListener('resize', () => cm.fitToViewport(true));
@@ -21,10 +22,22 @@ transport.connect();
 const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
 
 // other strokes engine (shared)
-const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: cm.canvas, dpr: cm.DPR, bufferMs: 200 }) || null);
-function resizeLayers() { otherEngine?.resizeToCanvas?.(); }
-function composeOthers() { const ctx = cm.ctx; ctx.save(); ctx.setTransform(1,0,0,1,0,0); otherEngine?.compositeTo?.(ctx); ctx.restore(); }
+const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: othersEl || cm.canvas, dpr: cm.DPR, bufferMs: 200 }) || null);
+function resizeLayers() {
+  if (othersEl) { othersEl.width = canvasEl.width; othersEl.height = canvasEl.height; }
+  otherEngine?.resizeToCanvas?.();
+}
+function composeOthers() {
+  if (othersEl) {
+    const k = othersEl.getContext('2d'); if (!k) return;
+    k.save(); k.setTransform(1,0,0,1,0,0); k.clearRect(0,0,othersEl.width, othersEl.height); otherEngine?.compositeTo?.(k); k.restore();
+  } else {
+    const ctx = cm.ctx; ctx.save(); ctx.setTransform(1,0,0,1,0,0); otherEngine?.compositeTo?.(ctx); ctx.restore();
+  }
+}
 otherEngine?.startRAF?.();
+// Composite others every frame
+;(function loop(){ try { composeOthers(); } catch(_) {} requestAnimationFrame(loop); })();
 
 const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 let __lastPreCountTs = 0;
@@ -113,9 +126,9 @@ transport.onmessage = (msg) => {
 })();
 
 let realtimeEverUsed = false;
-cm.onStrokeStart = ({ id, nx, ny, color, size, sizeN }) => {
+cm.onStrokeStart = ({ id, nx, ny, color, size, sizeN, tool }) => {
   if (SERVER_URL) {
-    transport.sendStroke({ type: 'stroke', phase: 'start', id, nx, ny, color, size, sizeN });
+    transport.sendStroke({ type: 'stroke', phase: 'start', id, nx, ny, color, size, sizeN, tool: (tool||'pen'), authorId: AUTHOR_ID });
     realtimeEverUsed = true;
   }
 };
@@ -127,16 +140,16 @@ function flushBatch() {
   transport.sendStrokeBatch(batch);
   if (postTimer) { clearTimeout(postTimer); postTimer = null; }
 }
-cm.onStrokePoint = ({ id, nx, ny }) => {
+cm.onStrokePoint = ({ id, nx, ny, tool }) => {
   if (!SERVER_URL) return;
   // WSなら逐次、HTTPならバッチ
-  transport.wsReady ? transport.sendStroke({ type: 'stroke', phase: 'point', id, nx, ny })
-                    : (postQueue.push({ type: 'stroke', phase: 'point', id, nx, ny }), postTimer ??= setTimeout(flushBatch, 40));
+  transport.wsReady ? transport.sendStroke({ type: 'stroke', phase: 'point', id, nx, ny, tool: (tool||'pen'), authorId: AUTHOR_ID })
+                    : (postQueue.push({ type: 'stroke', phase: 'point', id, nx, ny, tool: (tool||'pen'), authorId: AUTHOR_ID }), postTimer ??= setTimeout(flushBatch, 40));
 };
-cm.onStrokeEnd = ({ id }) => {
+cm.onStrokeEnd = ({ id, tool }) => {
   if (!SERVER_URL) return;
   flushBatch();
-  transport.sendStroke({ type: 'stroke', phase: 'end', id });
+  transport.sendStroke({ type: 'stroke', phase: 'end', id, tool: (tool||'pen'), authorId: AUTHOR_ID });
   if (!realtimeEverUsed) transport.sendFrameNow(canvasEl.toDataURL('image/png'));
 };
 

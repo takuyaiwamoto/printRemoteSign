@@ -22,10 +22,12 @@ export class CanvasManager {
     this.onStrokePoint = () => {};
     this.onStrokeEnd = () => {};
 
-    this._bindInputs();
-    // background
-    this.bgMode = 'white';
-    this.bgImage = null;
+  this._bindInputs();
+  // background
+  this.bgMode = 'white';
+  this.bgImage = null;
+  // tool (pen | eraser)
+  this.tool = 'pen';
   }
 
   setBrushSize(px) { this.brushSizeCss = Number(px) || this.brushSizeCss; this._applyBrush(); }
@@ -39,6 +41,9 @@ export class CanvasManager {
     ctx.lineWidth = this.brushSizeCss * this.DPR;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   }
+
+  setTool(tool){ this.tool = (tool === 'eraser') ? 'eraser' : 'pen'; }
+  getTool(){ return this.tool; }
 
   fitToViewport(preserve = false) {
     if (typeof window !== 'undefined' && window.SenderShared?.layout?.fitToViewport) {
@@ -145,7 +150,7 @@ export class CanvasManager {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const cssW = this.canvas.width / this.DPR; // CSSピクセル幅
     const sizeN = this.brushSizeCss / cssW;    // キャンバス幅に対する相対太さ
-    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: this.brushSizeCss, sizeN });
+    this.onStrokeStart?.({ id, nx: x / this.canvas.width, ny: y / this.canvas.height, color: this.brushColor, size: this.brushSizeCss, sizeN, tool: this.tool });
     this._currentId = id;
   }
 
@@ -158,7 +163,8 @@ export class CanvasManager {
 
     this.points.push({ x, y });
     const n = this.points.length;
-    const ctx = this.ctx;
+    const ctx = this.ctx; const isEraser = (this.tool === 'eraser');
+    ctx.save(); ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
     if (n === 2) {
       ctx.beginPath(); ctx.moveTo(this.points[0].x, this.points[0].y); ctx.lineTo(this.points[1].x, this.points[1].y); ctx.stroke();
     } else if (n >= 3) {
@@ -167,19 +173,22 @@ export class CanvasManager {
       const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
       ctx.beginPath(); ctx.moveTo(m1.x, m1.y); ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y); ctx.stroke();
     }
+    ctx.restore();
     this.lastX = x; this.lastY = y;
 
-    if (this._currentId) this.onStrokePoint?.({ id: this._currentId, nx: x / this.canvas.width, ny: y / this.canvas.height });
+    if (this._currentId) this.onStrokePoint?.({ id: this._currentId, nx: x / this.canvas.width, ny: y / this.canvas.height, tool: this.tool });
   }
 
   _end() {
     if (!this.isDrawing) return;
     this.isDrawing = false;
-    const n = this.points.length; const ctx = this.ctx;
+    const n = this.points.length; const ctx = this.ctx; const isEraser = (this.tool === 'eraser');
+    ctx.save(); ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
     if (n === 1) { ctx.beginPath(); ctx.fillStyle = this.brushColor; ctx.arc(this.points[0].x, this.points[0].y, (this.brushSizeCss * this.DPR) / 2, 0, Math.PI * 2); ctx.fill(); }
     else if (n >= 3) { const p0 = this.points[n - 3], p1 = this.points[n - 2], p2 = this.points[n - 1]; const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }; ctx.beginPath(); ctx.moveTo(mPrev.x, mPrev.y); ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); ctx.stroke(); }
+    ctx.restore();
     this.points = [];
-    if (this._currentId) this.onStrokeEnd?.({ id: this._currentId });
+    if (this._currentId) this.onStrokeEnd?.({ id: this._currentId, tool: this.tool });
     this._currentId = null;
   }
 

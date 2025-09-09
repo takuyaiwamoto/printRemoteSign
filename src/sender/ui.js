@@ -5,6 +5,7 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
   const clearAllBtn = document.getElementById('btn-clear-all');
   const sendBtn = document.getElementById('btn-send');
   const clearMineBtn = document.getElementById('btn-clear-mine');
+  const eraserBtn = document.getElementById('btn-eraser');
   const overlayStartBtn = document.getElementById('btn-overlay-start');
   const sizeInput = document.getElementById('size');
   const colorInput = document.getElementById('color');
@@ -52,6 +53,14 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
       if (colorInput) colorInput.value = col;
       setActive(colorBtns, btn);
     });
+  });
+
+  // Eraser toggle
+  let eraserActive = false;
+  eraserBtn?.addEventListener('click', () => {
+    eraserActive = !eraserActive;
+    eraserBtn.classList.toggle('is-active', eraserActive);
+    canvasManager.setTool(eraserActive ? 'eraser' : 'pen');
   });
 
   function performClear() {
