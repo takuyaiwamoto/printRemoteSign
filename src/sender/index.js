@@ -203,7 +203,7 @@ transport.onmessage = (msg) => {
       if (left > 0 && !window.__overlayWaiting) {
         el.style.display='block'; el.textContent=`終了まで${left}秒`;
         const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
-        if (left <= warn) { el.style.color='#fca5a5'; el.style.textShadow='0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
+        if (left <= warn) { el.style.color='#fca5a5'; el.style.textShadow='0 0 6px #ef4444,0 0 12px #ef4444,0 0 18px #ef4444'; }
         else { el.style.color='#fff'; el.style.textShadow='0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6'; }
         // Send button pulse when in warn window and not yet sent
         const warnOn = (left <= Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))))) && !window.__sentThisWindow;
@@ -226,6 +226,7 @@ transport.onmessage = (msg) => {
   if (msg.type === 'sendAnimation') {
     try { console.log('[sender(esm)] WS sendAnimation received -> start local preview'); } catch(_) {}
     try { pulseSend(false); showSendArrow(false); } catch(_) {}
+    try { window.__sentThisWindow = true; } catch(_) {}
     try { startLocalPreviewAnim(); } catch(_) {}
   }
   // strokes from others
@@ -271,10 +272,10 @@ transport.onmessage = (msg) => {
         const ts = Number(j.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
         const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
         const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
-        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
       } } catch(_) {}
     });
-    es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
+    es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
   } catch(_) {}
 })();
 
@@ -296,14 +297,14 @@ transport.onmessage = (msg) => {
       if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; try { if (msg.phase==='start'||msg.phase==='end') console.log('[sender(esm)] listenWS stroke', msg.phase, {id:msg.id, author:msg.authorId}); } catch(_) {} otherEngine?.handle?.(msg); return; }
       if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
       if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }
-      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
+      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
       if (msg.type === 'config' && msg.data) {
         // animKick handling
         if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
           const ts = Number(msg.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
           const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
           const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
-          if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted -> start preview', ts); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+          if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted -> start preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
         }
       }
     };

@@ -367,6 +367,7 @@
     es.addEventListener('sendAnimation', () => {
       try { console.log('[sender(main)] SSE sendAnimation -> start local preview'); } catch(_) {}
       try { pulseSend(false); showSendArrow(false); } catch(_) {}
+      try { window.__sentThisWindow = true; } catch(_) {}
       try { startLocalPreviewAnim(); } catch(_) {}
     });
   }
@@ -398,7 +399,7 @@
             if (left > 0 && !isWaiting) {
               el.style.display = 'block'; el.textContent = `終了まで${left}秒`;
               const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
-              if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
+              if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 6px #ef4444,0 0 12px #ef4444,0 0 18px #ef4444'; }
               else { el.style.color = '#fff'; el.style.textShadow = '0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6'; }
               // cue for send button when in warning window and not yet sent
               const warnOn = (left <= warn) && !sentThisWindow;
