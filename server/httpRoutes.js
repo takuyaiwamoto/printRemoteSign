@@ -61,7 +61,7 @@ function registerHttpRoutes(app) {
     const events = Array.isArray(body.batch) ? body.batch : [body];
     for (const e of events) {
       if (!e || e.type !== 'stroke' || !e.phase) continue;
-      const msg = { type: 'stroke', phase: e.phase, id: e.id, nx: e.nx, ny: e.ny, color: e.color, size: e.size };
+      const msg = { type: 'stroke', phase: e.phase, id: e.id, nx: e.nx, ny: e.ny, color: e.color, size: e.size, sizeN: e.sizeN, authorId: String(e.authorId||''), tool: e.tool || 'pen' };
       const txt = JSON.stringify(msg);
       broadcast(ch, txt, (c) => c.role === 'receiver');
       broadcastSSE(ch, msg);
