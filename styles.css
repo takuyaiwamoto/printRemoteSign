@@ -151,14 +151,22 @@ canvas {
 }
 
 /* デスクトップ（広い画面）のとき: 右パネルをキャンバス寄りに、操作ボタンを中段に固定して届きやすく */
-@media (min-width: 1200px) {
+/* デスクトップ相当（横幅が十分ある場合）は2x2配置にする */
+@media (min-width: 1000px) {
   .stage { gap: 16px 12px; grid-template-columns: fit-content(1000px) auto; }
   .side-tools {
     grid-template-columns: auto; /* 1列に縦積み */
+    /* 色を上、太さを下、その下に操作 */
+    grid-template-areas:
+      "colors"
+      "sizes"
+      "actions";
     gap: 10px;
     position: sticky; top: 80px; /* 常に見える位置に固定 */
     margin-left: 0; /* キャンバスに密着（横gapのみ） */
   }
+  .side-tools .colors { grid-area: colors; }
+  .side-tools .sizes  { grid-area: sizes; }
   .side-tools .group { justify-items: start; }
   .side-tools .actions {
     display: grid;
@@ -170,7 +178,7 @@ canvas {
     justify-content: start;
     position: sticky;
     top: 38vh; /* 画面中段付近に固定 */
-  }
+    }
   .action-btn { width: 96px; }
   /* Grid placement by id to realize 2x2 order: 上: 開始 送る / 下: 全消し 消しゴム */
   #btn-overlay-start { grid-area: start; }
