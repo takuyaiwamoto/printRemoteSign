@@ -53,7 +53,7 @@ function positionStartArrow(){
     const btn = __startBtn; if (!btn) return;
     const r = btn.getBoundingClientRect();
     el.style.left = (r.left + r.width/2) + 'px';
-    el.style.top = (r.top - 6) + 'px';
+    el.style.top = r.top + 'px';
   } catch(_) {}
 }
 function showStartArrow(on){
@@ -63,9 +63,12 @@ function showStartArrow(on){
       if (!el) { el = document.createElement('div'); el.id = 'startArrowCue'; el.className = 'arrow-cue'; el.textContent = '⬇︎'; document.body.appendChild(el); }
       el.style.display = 'block'; positionStartArrow();
       window.addEventListener('resize', positionStartArrow);
+      window.addEventListener('scroll', positionStartArrow, { passive: true });
+      setTimeout(positionStartArrow, 0);
     } else {
       if (el) el.style.display = 'none';
       window.removeEventListener('resize', positionStartArrow);
+      window.removeEventListener('scroll', positionStartArrow);
     }
   } catch(_) {}
 }
