@@ -187,7 +187,6 @@
     const moveDur = 1500;   // ms
     const rotateDelay = Math.max(0, Math.min(10, Number(__S_PREVIEW_ROT_DELAY_SEC)||0)) * 1000;
     const moveDelay = Math.max(0, Math.min(10, Number(__S_PREVIEW_MOVE_DELAY_SEC)||0)) * 1000;
-    const stayDelay = Math.max(0, Math.min(120, Number(__S_PREVIEW_STAY_SEC)||0)) * 1000;
 
     // Start: after rotateDelay (sender side does not rotate visually; only timing aligns)
     setTimeout(()=>{
@@ -205,13 +204,13 @@
           const t = performance.now();
           if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
             clearInterval(poll); fadeIn();
-            // Move after video end + stayDelay (receiver stay) + moveDelay
-            setTimeout(()=> startMove(), stayDelay + moveDelay);
+            // Move after video end + moveDelay (match receiver B)
+            setTimeout(()=> startMove(), moveDelay);
           }
         }, 100);
       } else {
-        // A: schedule move after rotation completes + stayDelay + moveDelay (no rotation on sender)
-        setTimeout(()=> startMove(), rotateDur + stayDelay + moveDelay);
+        // A: schedule move after rotation completes + moveDelay (match receiver A)
+        setTimeout(()=> startMove(), rotateDur + moveDelay);
       }
     }, rotateDelay);
 

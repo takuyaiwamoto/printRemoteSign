@@ -318,7 +318,6 @@ function startLocalPreviewAnim(){
   const rotateDur = 1000, moveDur = 1500;
   const rotateDelay = Math.max(0, Math.min(10, Number(window.__senderAnimDelayRotate||0))) * 1000;
   const moveDelay = Math.max(0, Math.min(10, Number(window.__senderAnimDelayMove||0))) * 1000;
-  const stayDelay = Math.max(0, Math.min(120, Number(window.__senderOverlayStaySec||0))) * 1000;
 
   setTimeout(()=>{
     // Sender side: do not rotate visually; just align timing
@@ -335,12 +334,12 @@ function startLocalPreviewAnim(){
         const t = performance.now();
         if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
           clearInterval(poll); fadeIn();
-          setTimeout(()=> startMove(), stayDelay + moveDelay);
+          setTimeout(()=> startMove(), moveDelay);
         }
       }, 100);
     } else {
-      // A: move after rotateDur + stayDelay + moveDelay (no rotation)
-      setTimeout(()=> startMove(), rotateDur + stayDelay + moveDelay);
+      // A: move after rotateDur + moveDelay (match receiver)
+      setTimeout(()=> startMove(), rotateDur + moveDelay);
     }
   }, rotateDelay);
 
