@@ -372,15 +372,18 @@ function startLocalPreviewAnim(){
     if (!vid) { vid = document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
     vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
   } else { try { if (vid) vid.remove(); } catch(_) {} vid = null; }
-  // Ink-only snapshot (self + others) — fade like receiver
+  // Ink-only snapshot (self + others) — make white transparent so only strokes appear over video
   const inkSnap = document.createElement('canvas'); inkSnap.width = canvasEl.width; inkSnap.height = canvasEl.height;
   const g = inkSnap.getContext('2d');
-  try { g.drawImage(cm ? cm.canvas : canvasEl, 0, 0); } catch(_) {} // self layer isn't directly exposed; fallback to canvas content
-  // Prefer others overlay if available
+  try { g.drawImage(cm ? cm.canvas : canvasEl, 0, 0); } catch(_) {}
+  try { if (othersEl && othersEl.width>0) g.drawImage(othersEl, 0, 0); else otherEngine?.compositeTo?.(g); } catch(_) {}
   try {
-    if (othersEl && othersEl.width>0) g.drawImage(othersEl, 0, 0);
-    else otherEngine?.compositeTo?.(g);
-  } catch(_) {}
+    const img = g.getImageData(0,0,inkSnap.width,inkSnap.height);
+    const d = img.data; // RGBA
+    // Make near-white pixels fully transparent to keep only ink
+    for (let i=0;i<d.length;i+=4){ const r=d[i],g1=d[i+1],b=d[i+2]; if (r>245 && g1>245 && b>245) d[i+3]=0; }
+    g.putImageData(img,0,0);
+  } catch(e) { try { console.warn('[sender(esm) preview] ink mask failed', e); } catch(_) {} }
   let inkImg = document.getElementById('senderAnimInk');
   if (!inkImg) { inkImg = document.createElement('canvas'); inkImg.id='senderAnimInk'; inner.appendChild(inkImg); }
   inkImg.width = inkSnap.width; inkImg.height = inkSnap.height;

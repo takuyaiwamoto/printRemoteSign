@@ -160,6 +160,12 @@
     const inkSnap = document.createElement('canvas'); inkSnap.width = canvas.width; inkSnap.height = canvas.height; const ig = inkSnap.getContext('2d');
     try { ig.drawImage(selfLayer.canvas, 0, 0); } catch(_) {}
     try { otherEngine?.compositeTo?.(ig); } catch(_) {}
+    try {
+      const img = ig.getImageData(0,0,inkSnap.width,inkSnap.height);
+      const d = img.data;
+      for (let i=0;i<d.length;i+=4){ const r=d[i],gg=d[i+1],b=d[i+2]; if (r>245 && gg>245 && b>245) d[i+3]=0; }
+      ig.putImageData(img,0,0);
+    } catch(e) { try { console.warn('[sender preview] ink mask failed', e); } catch(_) {} }
     let inkImg = document.getElementById('senderAnimInk'); if (!inkImg) { inkImg = document.createElement('canvas'); inkImg.id = 'senderAnimInk'; inner.appendChild(inkImg); }
     inkImg.width = inkSnap.width; inkImg.height = inkSnap.height; const i2 = inkImg.getContext('2d'); i2.clearRect(0,0,inkImg.width,inkImg.height); i2.drawImage(inkSnap,0,0);
     inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
