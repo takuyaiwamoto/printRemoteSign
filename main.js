@@ -205,17 +205,9 @@
           }
         }
         if (msg && msg.type === 'stroke') {
-          // 旧クライアントから authorId が無い場合も“他人”として扱う
+          // 他者のストロークのみ反映（自分はローカルで描画済み）
           if (msg.authorId && msg.authorId === AUTHOR_ID) return;
-          if (msg.phase === 'start') {
-            const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * canvas.width) : (Number(msg.size||4) * DPR);
-            const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() };
-            otherStrokes.set(msg.id, { author:String(msg.authorId||'anon'), tool:(msg.tool||'pen'), color: msg.color||'#000', sizeCss:Number(msg.size||4), sizeDev, points:[p], drawnUntil:0, ended:false });
-            const lay = getOtherLayer(String(msg.authorId||'anon')).ctx; lay.globalCompositeOperation = (msg.tool==='eraser')?'destination-out':'source-over'; lay.beginPath(); lay.fillStyle = msg.color||'#000'; lay.arc(p.x,p.y, (msg.tool==='eraser'?1.3:1.0)*sizeDev/2,0,Math.PI*2); lay.fill(); composeOthers();
-            slog('other start', { id: msg.id, author: msg.authorId });
-          } else if (msg.phase === 'point') {
-            const s = otherStrokes.get(msg.id); if (!s) return; const p = { x: msg.nx*canvas.width, y: msg.ny*canvas.height, time: performance.now() }; s.points.push(p);
-          } else if (msg.phase === 'end') { const s = otherStrokes.get(msg.id); if (!s) return; s.ended = true; }
+          otherEngine?.handle?.(msg);
         }
         if (msg && msg.type === 'clear') {
           // 背景は維持し、描画のみ消す

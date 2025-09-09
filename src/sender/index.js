@@ -79,9 +79,12 @@ transport.onmessage = (msg) => {
     }
     // Show tip while waiting (image visible and idle)
     if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayWaiting')) {
+      window.__overlayWaiting = !!msg.data.overlayWaiting;
       let tip = document.getElementById('senderPressStart');
       if (!tip) { tip = document.createElement('div'); tip.id = 'senderPressStart'; tip.style.cssText = 'position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
       tip.style.display = msg.data.overlayWaiting ? 'grid' : 'none';
+      // also hide countdown while waiting
+      const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
     }
     if (typeof msg.data.overlayWarnSec !== 'undefined') { const v=Number(msg.data.overlayWarnSec); if (isFinite(v)) window.__overlayWarnSec = Math.max(0, Math.min(60, Math.round(v))); }
     if (typeof msg.data.preCountSec !== 'undefined') { const v=Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
@@ -94,7 +97,7 @@ transport.onmessage = (msg) => {
         el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:44px;color:#fff;text-shadow:0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6;pointer-events:none;';
         el.textContent = '終了まで0秒'; document.body.appendChild(el);
       }
-      if (left > 0) {
+      if (left > 0 && !window.__overlayWaiting) {
         el.style.display = 'block'; el.textContent = `終了まで${left}秒`;
         const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
         if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
