@@ -60,7 +60,14 @@ function showStartArrow(on){
   try {
     let el = document.getElementById('startArrowCue');
     if (on) {
-      if (!el) { el = document.createElement('div'); el.id = 'startArrowCue'; el.className = 'arrow-cue'; el.textContent = '⬇︎'; document.body.appendChild(el); }
+      if (!el) {
+        el = document.createElement('div'); el.id = 'startArrowCue'; el.className = 'arrow-cue is-anim';
+        const inner = document.createElement('div'); inner.className = 'arrow-cue-inner'; inner.textContent = '↓';
+        el.appendChild(inner);
+        document.body.appendChild(el);
+      } else if (!el.querySelector('.arrow-cue-inner')) {
+        const inner = document.createElement('div'); inner.className = 'arrow-cue-inner'; inner.textContent = '↓'; el.appendChild(inner);
+      }
       el.style.display = 'block'; positionStartArrow();
       window.addEventListener('resize', positionStartArrow);
       window.addEventListener('scroll', positionStartArrow, { passive: true });

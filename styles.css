@@ -174,10 +174,15 @@ canvas {
   z-index: 10002;
   pointer-events: none;
   color: #60a5fa;
-  font-size: 42px;
+  font-size: clamp(56px, 6vw, 96px);
   line-height: 1;
-  text-shadow: 0 0 10px rgba(59,130,246,.8), 0 0 20px rgba(59,130,246,.6);
+  text-shadow: 0 0 10px rgba(59,130,246,.8), 0 0 24px rgba(59,130,246,.6);
+  filter: drop-shadow(0 0 6px rgba(59,130,246,.8)) drop-shadow(0 0 14px rgba(59,130,246,.6));
   animation: arrowPulse 1.1s ease-in-out infinite;
   left: 0; top: 0; /* will be positioned via JS */
-  transform: translate(-50%, calc(-100% - 8px));
+  transform: translate(-50%, calc(-100% - 12px));
 }
+
+.arrow-cue-inner { display: block; transform-origin: 50% 100%; }
+@keyframes arrowScalePulse { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.arrow-cue.is-anim .arrow-cue-inner { animation: arrowScalePulse 0.9s ease-in-out infinite; }
