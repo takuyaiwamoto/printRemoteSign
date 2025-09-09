@@ -332,28 +332,7 @@
       if (type === 'printNow') {
         trySchedulePrint();
       }
-      if (type === 'overlayStart') {
-        try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
-        if (overlayRunning) { try { console.log('[receiver] overlay already running; ignore'); } catch(_) {} return; }
-        overlayRunning = true;
-        // play audio immediately; start overlay move & countdown exactly preCountSec after start
-        try { playCountdownAudio(); } catch(_) {}
-        // notify overlay to show big 3-2-1 immediately
-        try { window.OverlayPreCount?.notify?.(); } catch(_) {}
-        // broadcast pre-count start to all senders in channel
-        try {
-          const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
-            .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
-          const data = { preCountStart: Date.now() };
-          fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
-            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
-        } catch(_) {}
-        const preDelayMs = Math.max(0, Math.round(Number(window.ReceiverConfig?.getPreCountSec?.()||3))) * 1000;
-        setTimeout(() => {
-          try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
-          startOverlayCountdown();
-        }, preDelayMs);
-      }
+      if (type === 'overlayStart') { try { Flow?.start?.(); } catch(_) {} }
     },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
@@ -369,7 +348,7 @@
   // ---- Overlay countdown broadcast ----
   let overlayCountdownTimer = null;
   let overlayCountdownT0 = 0;
-  let overlayRunning = false;
+  let overlayRunning = false; // kept for compatibility
   function stopOverlayCountdown(){ if (overlayCountdownTimer) { clearInterval(overlayCountdownTimer); overlayCountdownTimer = null; } }
   function publishOverlayRemain(sec){
     try {
@@ -386,6 +365,23 @@
       try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishRemain?.(sec); } catch(_) {}
     } catch(_) {}
   }
+
+  // ---- Simple flow state machine wrapper ----
+  const Flow = (function(){
+    try {
+      const Bus = (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL });
+      const SM = (window.ReceiverShared?.state || {}).createStateMachine?.({
+        preCountSecGetter: ()=> window.ReceiverConfig?.getPreCountSec?.(),
+        bus: Bus,
+        overlayStartCb: ()=>{ try { window.OverlayBridge?.triggerStart?.(); } catch(_) {} },
+        countdownStartCb: ()=>{ overlayRunning = true; startOverlayCountdown(); },
+        playAudioCb: ()=>{ playCountdownAudio(); try { window.OverlayPreCount?.notify?.(); } catch(_) {} }
+      });
+      // Waiting off/on around flow
+      const origStart = SM.start; SM.start = function(){ Bus?.publishWaiting?.(false); return origStart(); };
+      return SM;
+    } catch(_) { return null; }
+  })();
   function publishOverlayDescending(on){
     try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishDescending?.(on); } catch(_) {}
   }
