@@ -103,8 +103,12 @@ wss.on('connection', (ws, req) => {
     }
 
     if (msg.type === 'config' && msg.data && typeof msg.data === 'object') {
-      // Merge into channel config and broadcast
-      ch.config = { ...(ch.config || {}), ...msg.data };
+      // Ephemeral keys should NOT persist in channel config to avoid replay on new clients
+      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayKick']);
+      const persist = { ...(ch.config || {}) };
+      // Merge only non-ephemeral keys
+      for (const [k, v] of Object.entries(msg.data)) { if (!ephemeralKeys.has(k)) persist[k] = v; }
+      ch.config = persist;
       const payload = JSON.stringify({ type: 'config', data: msg.data });
       broadcast(ch, payload, () => true);
       broadcastSSE(ch, { type: 'config', data: msg.data });

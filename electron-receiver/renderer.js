@@ -385,6 +385,15 @@
         { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
     } catch(_) {}
   }
+  function publishOverlayDescending(on){
+    try {
+      const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+        .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+      const data = { overlayDescending: !!on };
+      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
+        { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+    } catch(_) {}
+  }
   function startOverlayCountdown(){
     stopOverlayCountdown();
     const staySec = Number(window.ReceiverConfig?.getOverlayStaySec?.() || 5);
@@ -395,7 +404,12 @@
       const elapsed = Math.floor((Date.now() - overlayCountdownT0) / 1000);
       const left = Math.max(0, remain - elapsed);
       publishOverlayRemain(left);
-      if (left <= 0) { stopOverlayCountdown(); overlayRunning = false; }
+      if (left <= 0) {
+        // start descending window for ~2.5s
+        publishOverlayDescending(true);
+        setTimeout(()=> publishOverlayDescending(false), 2500);
+        stopOverlayCountdown(); overlayRunning = false;
+      }
     }, 1000);
   }
 

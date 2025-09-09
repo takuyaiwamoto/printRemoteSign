@@ -26,6 +26,8 @@ function resizeLayers() { otherEngine?.resizeToCanvas?.(); }
 function composeOthers() { const ctx = cm.ctx; ctx.save(); ctx.setTransform(1,0,0,1,0,0); otherEngine?.compositeTo?.(ctx); ctx.restore(); }
 otherEngine?.startRAF?.();
 
+const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+let __lastPreCountTs = 0;
 transport.onmessage = (msg) => {
   if (msg.type === 'config' && msg.data) {
     if (msg.data.bgSender) {
@@ -34,6 +36,11 @@ transport.onmessage = (msg) => {
     }
     // Pre-count 3-2-1 in center for all senders
     if (Object.prototype.hasOwnProperty.call(msg.data, 'preCountStart')) {
+      const ts = Number(msg.data.preCountStart)||0;
+      const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (!(ts > __lastPreCountTs && nowT - __BOOT_AT > 1500)) { /* ignore stale/boot */ }
+      else {
+        __lastPreCountTs = ts;
       let pc = document.getElementById('senderPreCount');
       if (!pc) {
         pc = document.createElement('div'); pc.id = 'senderPreCount';
@@ -52,6 +59,7 @@ transport.onmessage = (msg) => {
         n -= 1; if (n > 0) { num.textContent = String(n); }
         else { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; pc.style.display='none'; }
       }, 1000);
+      }
     }
     if (typeof msg.data.overlayWarnSec !== 'undefined') { const v=Number(msg.data.overlayWarnSec); if (isFinite(v)) window.__overlayWarnSec = Math.max(0, Math.min(60, Math.round(v))); }
     if (typeof msg.data.preCountSec !== 'undefined') { const v=Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
@@ -146,4 +154,10 @@ wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLaye
         n -= 1; if (n > 0) { num.textContent = String(n); }
         else { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; pc.style.display='none'; }
       }, 1000);
+    }
+    // Show "開始を押してください" during descending window
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayDescending')) {
+      let tip = document.getElementById('senderPressStart');
+      if (!tip) { tip = document.createElement('div'); tip.id = 'senderPressStart'; tip.style.cssText = 'position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+      tip.style.display = msg.data.overlayDescending ? 'grid' : 'none';
     }

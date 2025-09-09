@@ -141,6 +141,8 @@
     ws.onopen = () => { wsReady = true; httpFallback = false; slog('ws open'); /* 首描画のためのフレーム送信は不要 */ };
     ws.onclose = () => { wsReady = false; slog('ws close'); setTimeout(connectWS, 1000); };
     ws.onerror = () => { wsReady = false; httpFallback = !!SERVER_URL; slog('ws error'); };
+    const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    let __lastPreCountTs = 0;
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null');
@@ -158,6 +160,10 @@
           }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountStart')) {
           try {
+            const ts = Number(msg.data.preCountStart)||0;
+            const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            if (!(ts > __lastPreCountTs && nowT - __BOOT_AT > 1500)) { /* ignore stale/boot */ return; }
+            __lastPreCountTs = ts;
             let pc = document.getElementById('senderPreCount');
             if (!pc) {
               pc = document.createElement('div'); pc.id = 'senderPreCount';
@@ -177,6 +183,13 @@
         }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountSec')) {
           const v = Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v)));
+        }
+        if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayDescending')) {
+          try {
+            let tip = document.getElementById('senderPressStart');
+            if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+            tip.style.display = msg.data.overlayDescending ? 'grid' : 'none';
+          } catch(_) {}
         }
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
           if (typeof msg.data.bgSender === 'string') {
