@@ -225,6 +225,7 @@ transport.onmessage = (msg) => {
   // Local preview animation sync with receiver
   if (msg.type === 'sendAnimation') {
     try { console.log('[sender(esm)] WS sendAnimation received -> start local preview'); } catch(_) {}
+    try { pulseSend(false); showSendArrow(false); } catch(_) {}
     try { startLocalPreviewAnim(); } catch(_) {}
   }
   // strokes from others
@@ -270,10 +271,10 @@ transport.onmessage = (msg) => {
         const ts = Number(j.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
         const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
         const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
-        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
       } } catch(_) {}
     });
-    es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
+    es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
   } catch(_) {}
 })();
 
@@ -295,7 +296,7 @@ transport.onmessage = (msg) => {
       if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; try { if (msg.phase==='start'||msg.phase==='end') console.log('[sender(esm)] listenWS stroke', msg.phase, {id:msg.id, author:msg.authorId}); } catch(_) {} otherEngine?.handle?.(msg); return; }
       if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
       if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }
-      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
+      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
       if (msg.type === 'config' && msg.data) {
         // animKick handling
         if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
@@ -498,6 +499,7 @@ function startLocalPreviewAnim(){
       if (ts > window.__senderAnimKickTs && nowT - bootAt > 1500) {
         window.__senderAnimKickTs = ts;
         try { console.log('[sender(esm)] config.animKick accepted -> start local preview', ts); } catch(_) {}
+        try { pulseSend(false); showSendArrow(false); } catch(_) {}
         try { startLocalPreviewAnim(); } catch(_) {}
       } else {
         try { console.log('[sender(esm)] config.animKick ignored', { ts, last: window.__senderAnimKickTs, bootDelta: Math.round(nowT-bootAt) }); } catch(_) {}

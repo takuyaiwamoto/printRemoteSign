@@ -366,6 +366,7 @@
     });
     es.addEventListener('sendAnimation', () => {
       try { console.log('[sender(main)] SSE sendAnimation -> start local preview'); } catch(_) {}
+      try { pulseSend(false); showSendArrow(false); } catch(_) {}
       try { startLocalPreviewAnim(); } catch(_) {}
     });
   }
@@ -497,6 +498,7 @@
         }
         if (msg && msg.type === 'sendAnimation') {
           try { console.log('[sender(main)] WS sendAnimation received -> start local preview'); } catch(_) {}
+          try { pulseSend(false); showSendArrow(false); } catch(_) {}
           try { startLocalPreviewAnim(); } catch(_) {}
         }
         if (msg && msg.type === 'clear') {
