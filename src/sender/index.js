@@ -182,6 +182,10 @@ transport.onmessage = (msg) => {
     }
   }
   }
+  // Local preview animation sync with receiver
+  if (msg.type === 'sendAnimation') {
+    try { startLocalPreviewAnim(); } catch(_) {}
+  }
   // strokes from others
   if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; otherEngine?.handle?.(msg); }
   if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); }
@@ -223,3 +227,77 @@ try {
     const cd = document.getElementById('senderCountdown'); if (cd) cd.style.display='none';
   }
 } catch(_) {}
+
+// ---- Local preview overlay (video + current drawing), synchronized by sendAnimation ----
+function startLocalPreviewAnim(){
+  // Build overlay elements
+  const wrapEl = document.getElementById('canvas-wrap') || cm.wrap || canvasEl.parentElement;
+  if (!wrapEl) return;
+  let overlay = document.getElementById('senderAnimOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div'); overlay.id='senderAnimOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10050;display:block;pointer-events:auto;background:transparent;';
+    document.body.appendChild(overlay);
+  }
+  // box clipped to canvas rect
+  let box = document.getElementById('senderAnimBox');
+  if (!box) { box = document.createElement('div'); box.id='senderAnimBox'; overlay.appendChild(box); }
+  box.style.cssText = 'position:absolute;overflow:hidden;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#000;';
+  const r = wrapEl.getBoundingClientRect();
+  box.style.left = Math.round(r.left) + 'px';
+  box.style.top = Math.round(r.top) + 'px';
+  box.style.width = Math.round(r.width) + 'px';
+  box.style.height = Math.round(r.height) + 'px';
+  // inner moves/rotates; fill with video + snapshot
+  let inner = document.getElementById('senderAnimInner');
+  if (!inner) { inner = document.createElement('div'); inner.id='senderAnimInner'; box.appendChild(inner); }
+  inner.style.cssText = 'position:absolute;inset:0;transform-origin:center center;';
+  // Build video element (cover)
+  let vid = document.getElementById('senderAnimVideo');
+  if (!vid) { vid = document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
+  vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+  // Snapshot current drawing (paint + others)
+  const snap = document.createElement('canvas'); snap.width = canvasEl.width; snap.height = canvasEl.height;
+  const g = snap.getContext('2d');
+  try { g.drawImage(canvasEl, 0, 0); } catch(_) {}
+  try {
+    if (othersEl && othersEl.width>0) g.drawImage(othersEl, 0, 0);
+    else otherEngine?.compositeTo?.(g);
+  } catch(_) {}
+  let snapImg = document.getElementById('senderAnimSnap');
+  if (!snapImg) { snapImg = document.createElement('canvas'); snapImg.id='senderAnimSnap'; inner.appendChild(snapImg); }
+  snapImg.width = snap.width; snapImg.height = snap.height;
+  const sg = snapImg.getContext('2d'); sg.clearRect(0,0,snapImg.width,snapImg.height); sg.drawImage(snap,0,0);
+  snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
+  // Clear local canvas before move (do not broadcast)
+  try { cm.clear(); } catch(_) {}
+  try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
+  // Disable local inputs while animating
+  overlay.addEventListener('pointerdown', (e)=> e.preventDefault(), { once: false });
+  // Load candidate video (same as receiver)
+  const candidates = [
+    'assets/backVideo1.mp4', '../assets/backVideo1.mp4', 'backVideo1.mp4', '../backVideo1.mp4',
+    (window.ASSET_BASE ? (window.ASSET_BASE.replace(/\/$/,'') + '/assets/backVideo1.mp4') : '')
+  ].filter(Boolean);
+  (async () => {
+    let ok = false;
+    for (const url of candidates) {
+      try {
+        await new Promise((res,rej)=>{ const onOk=()=>{ cleanup(); res(); }; const onErr=()=>{ cleanup(); rej(new Error('e')); }; function cleanup(){ vid.removeEventListener('loadedmetadata', onOk); vid.removeEventListener('error', onErr);} vid.addEventListener('loadedmetadata', onOk, { once:true }); vid.addEventListener('error', onErr, { once:true }); vid.src=url; vid.load(); });
+        ok = true; break;
+      } catch(_) { /* try next */ }
+    }
+    try { if (ok) await vid.play().catch(()=>{}); } catch(_) {}
+  })();
+  // Animate: rotate 1s then move down 1.5s (inner only)
+  inner.style.transform = 'rotate(0deg) translateY(0)';
+  inner.style.transition = 'transform 1000ms ease';
+  requestAnimationFrame(()=>{ inner.style.transform = 'rotate(180deg) translateY(0)'; });
+  setTimeout(()=>{
+    inner.style.transition = 'transform 1500ms ease';
+    inner.style.transform = 'rotate(180deg) translateY(120%)';
+    setTimeout(()=>{
+      try { overlay.remove(); } catch(_) {}
+    }, 1500 + 30);
+  }, 1000 + 20);
+}

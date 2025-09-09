@@ -118,6 +118,37 @@
       }
     } catch(_) {}
   }
+
+  // ---- Local preview overlay (video + current drawing) synced by sendAnimation ----
+  function startLocalPreviewAnim(){
+    const wrapEl = document.getElementById('canvas-wrap') || wrap;
+    if (!wrapEl) return;
+    let overlay = document.getElementById('senderAnimOverlay');
+    if (!overlay) { overlay = document.createElement('div'); overlay.id='senderAnimOverlay'; overlay.style.cssText='position:fixed;inset:0;z-index:10050;display:block;pointer-events:auto;background:transparent;'; document.body.appendChild(overlay); }
+    let box = document.getElementById('senderAnimBox'); if (!box) { box = document.createElement('div'); box.id='senderAnimBox'; overlay.appendChild(box); }
+    box.style.cssText='position:absolute;overflow:hidden;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#000;';
+    const r = wrapEl.getBoundingClientRect(); box.style.left=Math.round(r.left)+'px'; box.style.top=Math.round(r.top)+'px'; box.style.width=Math.round(r.width)+'px'; box.style.height=Math.round(r.height)+'px';
+    let inner = document.getElementById('senderAnimInner'); if (!inner) { inner = document.createElement('div'); inner.id='senderAnimInner'; box.appendChild(inner); }
+    inner.style.cssText='position:absolute;inset:0;transform-origin:center center;';
+    let vid = document.getElementById('senderAnimVideo'); if (!vid) { vid=document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
+    vid.muted=true; vid.playsInline=true; vid.preload='auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+    // snapshot
+    const snap=document.createElement('canvas'); snap.width=canvas.width; snap.height=canvas.height; const g=snap.getContext('2d');
+    try { g.drawImage(canvas,0,0); } catch(_) {}
+    try { otherEngine?.compositeTo?.(g); } catch(_) {}
+    let snapImg=document.getElementById('senderAnimSnap'); if(!snapImg){ snapImg=document.createElement('canvas'); snapImg.id='senderAnimSnap'; inner.appendChild(snapImg); }
+    snapImg.width=snap.width; snapImg.height=snap.height; const sg=snapImg.getContext('2d'); sg.clearRect(0,0,snapImg.width,snapImg.height); sg.drawImage(snap,0,0); snapImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
+    // clear local (no broadcast)
+    try { selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height); composeOthers(); } catch(_) {}
+    // block input
+    overlay.addEventListener('pointerdown', (e)=> e.preventDefault(), { once:false });
+    // load video
+    const candidates=['assets/backVideo1.mp4','../assets/backVideo1.mp4','backVideo1.mp4','../backVideo1.mp4'];
+    (async()=>{ let ok=false; for(const url of candidates){ try{ await new Promise((res,rej)=>{ const onOk=()=>{ cleanup(); res(); }; const onErr=()=>{ cleanup(); rej(new Error('e')); }; function cleanup(){ vid.removeEventListener('loadedmetadata', onOk); vid.removeEventListener('error', onErr);} vid.addEventListener('loadedmetadata', onOk, {once:true}); vid.addEventListener('error', onErr, {once:true}); vid.src=url; vid.load(); }); ok=true; break; } catch(_){} } try{ if(ok) await vid.play().catch(()=>{});}catch(_){} })();
+    // animate
+    inner.style.transform='rotate(0deg) translateY(0)'; inner.style.transition='transform 1000ms ease'; requestAnimationFrame(()=>{ inner.style.transform='rotate(180deg) translateY(0)'; });
+    setTimeout(()=>{ inner.style.transition='transform 1500ms ease'; inner.style.transform='rotate(180deg) translateY(120%)'; setTimeout(()=>{ try{ overlay.remove(); }catch(_){} }, 1500+30); }, 1000+20);
+  }
   function showStartPrompt(){
     try {
       let tip = document.getElementById('senderPressStart');
@@ -323,6 +354,9 @@
           if (msg.authorId && msg.authorId === AUTHOR_ID) { if (SDEBUG) slog('ws stroke (self) ignored', msg.id); return; }
           if (SDEBUG) slog('ws stroke from', msg.authorId||'unknown', msg.phase, msg.id);
           otherEngine?.handle?.(msg);
+        }
+        if (msg && msg.type === 'sendAnimation') {
+          try { startLocalPreviewAnim(); } catch(_) {}
         }
         if (msg && msg.type === 'clear') {
           // 背景は維持し、描画のみ消す
