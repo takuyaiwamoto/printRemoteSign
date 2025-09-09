@@ -52,6 +52,12 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
       canvasManager.setBrushColor(col);
       if (colorInput) colorInput.value = col;
       setActive(colorBtns, btn);
+      // If eraser is active, turn it off when selecting a color
+      if (eraserActive) {
+        eraserActive = false;
+        try { eraserBtn?.classList.remove('is-active'); } catch(_) {}
+        try { canvasManager.setTool('pen'); } catch(_) {}
+      }
     });
   });
 

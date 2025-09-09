@@ -800,6 +800,11 @@
       ctx.strokeStyle = brushColor;
       if (colorInput) colorInput.value = brushColor;
       setActive(colorBtns, btn);
+      // If eraser is active, turn it off on color change
+      if (eraserActive) {
+        eraserActive = false;
+        try { eraserBtn?.classList.remove('is-active'); } catch(_) {}
+      }
     });
   });
 
