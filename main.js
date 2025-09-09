@@ -53,6 +53,25 @@
   const pulseStart = (on)=>{ try { overlayStartBtn?.classList.toggle('btn-pulse-blue', !!on); } catch(_) {} };
   const pulseSend = (on)=>{ try { sendBtn?.classList.toggle('btn-pulse-red', !!on); } catch(_) {} };
   let sentThisWindow = false; // reset when waiting or new session starts
+  // Arrow cue handling for legacy build
+  function positionStartArrow(){
+    try {
+      const el = document.getElementById('startArrowCue'); if (!el) return;
+      const btn = overlayStartBtn; if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      el.style.left = (r.left + r.width/2) + 'px';
+      el.style.top = (r.top - 6) + 'px';
+    } catch(_) {}
+  }
+  function showStartArrow(on){
+    try {
+      let el = document.getElementById('startArrowCue');
+      if (on) {
+        if (!el) { el = document.createElement('div'); el.id='startArrowCue'; el.className='arrow-cue'; el.textContent='⬇︎'; document.body.appendChild(el); }
+        el.style.display='block'; positionStartArrow(); window.addEventListener('resize', positionStartArrow);
+      } else { if (el) el.style.display='none'; window.removeEventListener('resize', positionStartArrow); }
+    } catch(_) {}
+  }
   function showStartPrompt(){
     try {
       let tip = document.getElementById('senderPressStart');
@@ -230,6 +249,7 @@
           window.__overlayWaiting = !!msg.data.overlayWaiting;
           // start button pulse while waiting; reset send when back to waiting
           pulseStart(window.__overlayWaiting === true);
+          showStartArrow(window.__overlayWaiting === true);
           if (window.__overlayWaiting) { sentThisWindow = false; pulseSend(false); }
           const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
         }
@@ -239,6 +259,7 @@
             let tip = document.getElementById('senderPressStart');
             if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
             tip.style.display = msg.data.overlayWaiting ? 'grid' : 'none';
+            if (msg.data.overlayWaiting) showStartArrow(true); else showStartArrow(false);
           } catch(_) {}
         }
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
@@ -608,7 +629,7 @@
   // ---- Overlay start trigger (for overlay window) ----
   overlayStartBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] overlay start button clicked'); } catch(_) {}
-    pulseStart(false); sentThisWindow = false; // entering session
+    pulseStart(false); showStartArrow(false); sentThisWindow = false; // entering session
     if (wsReady) {
       try { console.log('[sender(main)] sending overlayStart via WS'); ws.send(JSON.stringify({ type: 'overlayStart' })); } catch (_) {}
       // 互換性のため config でもキックを送る
@@ -633,7 +654,7 @@
         tip.appendChild(t); document.body.appendChild(tip);
       }
       tip.style.display = 'grid';
-      pulseStart(true);
+      pulseStart(true); showStartArrow(true);
       const el = document.getElementById('senderCountdown'); if (el) el.style.display = 'none';
     }
   } catch(_) {}

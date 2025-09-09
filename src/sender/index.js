@@ -46,6 +46,29 @@ const __startBtn = (()=>{ try { return document.getElementById('btn-overlay-star
 function pulseStart(on){ try { __startBtn?.classList.toggle('btn-pulse-blue', !!on); } catch(_) {} }
 function pulseSend(on){ try { __sendBtn?.classList.toggle('btn-pulse-red', !!on); } catch(_) {} }
 window.__sentThisWindow = false;
+// Arrow cue handling
+function positionStartArrow(){
+  try {
+    const el = document.getElementById('startArrowCue'); if (!el) return;
+    const btn = __startBtn; if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    el.style.left = (r.left + r.width/2) + 'px';
+    el.style.top = (r.top - 6) + 'px';
+  } catch(_) {}
+}
+function showStartArrow(on){
+  try {
+    let el = document.getElementById('startArrowCue');
+    if (on) {
+      if (!el) { el = document.createElement('div'); el.id = 'startArrowCue'; el.className = 'arrow-cue'; el.textContent = '⬇︎'; document.body.appendChild(el); }
+      el.style.display = 'block'; positionStartArrow();
+      window.addEventListener('resize', positionStartArrow);
+    } else {
+      if (el) el.style.display = 'none';
+      window.removeEventListener('resize', positionStartArrow);
+    }
+  } catch(_) {}
+}
 function showStartPrompt(){
   try {
     let tip = document.getElementById('senderPressStart');
@@ -80,6 +103,7 @@ transport.onmessage = (msg) => {
       window.__overlayWaiting = !!msg.data.overlayWaiting;
       // Start button pulse while waiting
       pulseStart(window.__overlayWaiting === true);
+      showStartArrow(window.__overlayWaiting === true);
       if (window.__overlayWaiting) { window.__sentThisWindow = false; pulseSend(false); }
       let tip = document.getElementById('senderPressStart');
       if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
@@ -107,10 +131,10 @@ transport.onmessage = (msg) => {
         pulseSend(false);
         if (left === 0 && !window.__sentThisWindow) {
           // Encourage to press start again immediately
-          showStartPrompt();
-        }
+          showStartPrompt(); showStartArrow(true);
       }
     }
+  }
   }
   // strokes from others
   if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; otherEngine?.handle?.(msg); }
@@ -136,7 +160,7 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
 // Hook into send/start buttons to clear pulses on click
 try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); }); } catch(_) {}
-try { __startBtn?.addEventListener('click', () => { pulseStart(false); window.__sentThisWindow = false; }); } catch(_) {}
+try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
 // Ensure the start tip is visible immediately after page reload if waiting
 try {
@@ -149,7 +173,7 @@ try {
       tip.appendChild(t); document.body.appendChild(tip);
     }
     tip.style.display = 'grid';
-    pulseStart(true);
+    pulseStart(true); showStartArrow(true);
     const cd = document.getElementById('senderCountdown'); if (cd) cd.style.display='none';
   }
 } catch(_) {}
