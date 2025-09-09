@@ -4,7 +4,7 @@ import { wireUI } from './ui.js';
 
 // ---- Version ----
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.4';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.5';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 // ---- Params ----
@@ -239,6 +239,10 @@ transport.onmessage = (msg) => {
 (() => {
   if (!SERVER_URL) return; const toHttp = (u)=> u.replace(/^wss?:\/\//i, (m)=> m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,'');
   try {
+    // On GitHub Pages, SSE to a different origin is often blocked by CORS/502.
+    // We rely on the receiver-role WS listener instead.
+    const isPages = /github\.io$/i.test(location.host);
+    if (isPages) { try { console.warn('[sender(esm)] SSE disabled on Pages (CORS). Relying on WS.'); } catch(_) {} return; }
     const esUrl = `${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`;
     try { console.log('[sender(esm)] SSE connect', esUrl); } catch(_) {}
     const es = new EventSource(esUrl);
