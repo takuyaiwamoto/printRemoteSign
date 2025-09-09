@@ -104,7 +104,7 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'config' && msg.data && typeof msg.data === 'object') {
       // Ephemeral keys should NOT persist in channel config to avoid replay on new clients
-      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayKick']);
+      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayWaiting','overlayKick']);
       const persist = { ...(ch.config || {}) };
       // Merge only non-ephemeral keys
       for (const [k, v] of Object.entries(msg.data)) { if (!ephemeralKeys.has(k)) persist[k] = v; }

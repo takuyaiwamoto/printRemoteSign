@@ -360,6 +360,14 @@
     log: (...a) => log(...a)
   });
   net?.start?.();
+  // At idle boot, indicate waiting state so senders show tip immediately
+  try {
+    const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+      .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+    const data = { overlayWaiting: true };
+    fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  } catch(_) {}
 
   // ---- Overlay countdown broadcast ----
   let overlayCountdownTimer = null;

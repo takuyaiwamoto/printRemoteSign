@@ -61,6 +61,12 @@ transport.onmessage = (msg) => {
       }, 1000);
       }
     }
+    // Show tip while waiting (image visible and idle)
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayWaiting')) {
+      let tip = document.getElementById('senderPressStart');
+      if (!tip) { tip = document.createElement('div'); tip.id = 'senderPressStart'; tip.style.cssText = 'position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+      tip.style.display = msg.data.overlayWaiting ? 'grid' : 'none';
+    }
     if (typeof msg.data.overlayWarnSec !== 'undefined') { const v=Number(msg.data.overlayWarnSec); if (isFinite(v)) window.__overlayWarnSec = Math.max(0, Math.min(60, Math.round(v))); }
     if (typeof msg.data.preCountSec !== 'undefined') { const v=Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
     // Overlay countdown relay for senders (with warn color)
@@ -155,9 +161,4 @@ wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLaye
         else { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; pc.style.display='none'; }
       }, 1000);
     }
-    // Show "開始を押してください" during descending window
-    if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayDescending')) {
-      let tip = document.getElementById('senderPressStart');
-      if (!tip) { tip = document.createElement('div'); tip.id = 'senderPressStart'; tip.style.cssText = 'position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
-      tip.style.display = msg.data.overlayDescending ? 'grid' : 'none';
-    }
+    // NOTE: overlayDescending is ignored for the tip. Tip is controlled only by overlayWaiting.
