@@ -183,7 +183,8 @@
           if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display='none'; }
           if (preCount) {
             preCount.classList.remove('hidden'); preCount.style.display='block';
-            let n = 3; preCount.textContent = String(n);
+            const preN = Math.max(0, Math.round(window.__preCountSec||3));
+            let n = preN; preCount.textContent = String(n||0);
             if (preTimer) { clearInterval(preTimer); preTimer = null; }
             preTimer = setInterval(() => {
               n -= 1;
