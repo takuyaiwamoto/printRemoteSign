@@ -4,7 +4,7 @@ import { wireUI } from './ui.js';
 
 // ---- Version ----
 const SHARED_CONST = (window.SenderShared && window.SenderShared.constants) || null;
-const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.2';
+const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.3';
 try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch { }
 
 // ---- Params ----
@@ -269,6 +269,40 @@ transport.onmessage = (msg) => {
     });
     es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
   } catch(_) {}
+})();
+
+// ---- Extra WS listener with receiver role (for legacy servers that only broadcast to receivers) ----
+(() => {
+  if (!SERVER_URL) return;
+  const toWs = (u)=> u.replace(/^http/i, 'ws').replace(/\/$/,'');
+  let wsListen = null; let timer = null;
+  function open(){
+    const url = `${toWs(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
+    try { wsListen = new WebSocket(url); } catch (e) { try { console.warn('[sender(esm)] listenWS construct error', e?.message||e); } catch(_) {} schedule(); return; }
+    wsListen.onopen = ()=>{ try { console.log('[sender(esm)] listenWS open', url); } catch(_) {} };
+    wsListen.onerror = (e)=>{ try { console.warn('[sender(esm)] listenWS error', e); } catch(_) {} };
+    wsListen.onclose = ()=>{ try { console.warn('[sender(esm)] listenWS close, retry'); } catch(_) {} schedule(); };
+    wsListen.onmessage = (ev)=>{
+      let msg=null; try { msg = JSON.parse(typeof ev.data==='string'?ev.data:'null'); } catch(_) {}
+      if (!msg || !msg.type) return;
+      try { console.log('[sender(esm)] listenWS message', msg.type); } catch(_) {}
+      if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; try { if (msg.phase==='start'||msg.phase==='end') console.log('[sender(esm)] listenWS stroke', msg.phase, {id:msg.id, author:msg.authorId}); } catch(_) {} otherEngine?.handle?.(msg); return; }
+      if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
+      if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }
+      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
+      if (msg.type === 'config' && msg.data) {
+        // animKick handling
+        if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
+          const ts = Number(msg.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
+          const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
+          const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
+          if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted -> start preview', ts); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+        }
+      }
+    };
+  }
+  function schedule(){ if (timer) return; timer = setTimeout(()=>{ timer=null; open(); }, 1000); }
+  open();
 })();
 
 // ---- Outgoing strokes ----
