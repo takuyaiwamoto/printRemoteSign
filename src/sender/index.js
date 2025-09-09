@@ -88,6 +88,39 @@ function showStartPrompt(){
   } catch(_) {}
 }
 
+// ---- Send button arrow (red) ----
+function positionSendArrow(){
+  try {
+    const el = document.getElementById('sendArrowCue'); if (!el) return;
+    const btn = __sendBtn; if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    el.style.left = (r.left + r.width/2) + 'px';
+    el.style.top = r.top + 'px';
+  } catch(_) {}
+}
+function showSendArrow(on){
+  try {
+    let el = document.getElementById('sendArrowCue');
+    if (on) {
+      if (!el) {
+        el = document.createElement('div'); el.id = 'sendArrowCue'; el.className = 'arrow-cue arrow-cue-red is-anim';
+        const inner = document.createElement('div'); inner.className = 'arrow-cue-inner'; inner.textContent = '↓';
+        el.appendChild(inner); document.body.appendChild(el);
+      } else if (!el.querySelector('.arrow-cue-inner')) {
+        const inner = document.createElement('div'); inner.className = 'arrow-cue-inner'; inner.textContent = '↓'; el.appendChild(inner);
+      }
+      el.style.display = 'block'; positionSendArrow();
+      window.addEventListener('resize', positionSendArrow);
+      window.addEventListener('scroll', positionSendArrow, { passive: true });
+      setTimeout(positionSendArrow, 0);
+    } else {
+      if (el) el.style.display = 'none';
+      window.removeEventListener('resize', positionSendArrow);
+      window.removeEventListener('scroll', positionSendArrow);
+    }
+  } catch(_) {}
+}
+
 transport.onmessage = (msg) => {
   if (msg.type === 'config' && msg.data) {
     // Background
@@ -114,7 +147,7 @@ transport.onmessage = (msg) => {
       // Start button pulse while waiting
       pulseStart(window.__overlayWaiting === true);
       showStartArrow(window.__overlayWaiting === true);
-      if (window.__overlayWaiting) { window.__sentThisWindow = false; pulseSend(false); }
+      if (window.__overlayWaiting) { window.__sentThisWindow = false; pulseSend(false); try { const el = document.getElementById('sendArrowCue'); if (el) el.style.display='none'; } catch(_) {} }
       let tip = document.getElementById('senderPressStart');
       if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
       tip.style.display = window.__overlayWaiting ? 'grid' : 'none';
@@ -135,10 +168,13 @@ transport.onmessage = (msg) => {
         // Send button pulse when in warn window and not yet sent
         const warnOn = (left <= Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))))) && !window.__sentThisWindow;
         pulseSend(warnOn);
+        // Also show a red arrow pointing at the send button
+        const canShow = warnOn && !(__sendBtn?.disabled);
+        try { showSendArrow(canShow); } catch(_) {}
       } else {
         // countdown ended or waiting state: hide and reset cues
         el.style.display='none';
-        pulseSend(false);
+        pulseSend(false); try { showSendArrow(false); } catch(_) {}
         if (left === 0 && !window.__sentThisWindow) {
           // Encourage to press start again immediately
           showStartPrompt(); showStartArrow(true);
@@ -169,7 +205,7 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
 // Hook into send/start buttons to clear pulses on click
-try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); }); } catch(_) {}
+try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
 // Ensure the start tip is visible immediately after page reload if waiting
@@ -183,7 +219,7 @@ try {
       tip.appendChild(t); document.body.appendChild(tip);
     }
     tip.style.display = 'grid';
-    pulseStart(true); showStartArrow(true);
+    pulseStart(true); showStartArrow(true); try { showSendArrow(false); } catch(_) {}
     const cd = document.getElementById('senderCountdown'); if (cd) cd.style.display='none';
   }
 } catch(_) {}

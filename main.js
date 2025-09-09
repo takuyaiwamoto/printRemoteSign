@@ -85,6 +85,39 @@
       }
     } catch(_) {}
   }
+
+  // Send arrow (red)
+  function positionSendArrow(){
+    try {
+      const el = document.getElementById('sendArrowCue'); if (!el) return;
+      const btn = sendBtn; if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      el.style.left = (r.left + r.width/2) + 'px';
+      el.style.top = r.top + 'px';
+    } catch(_) {}
+  }
+  function showSendArrow(on){
+    try {
+      let el = document.getElementById('sendArrowCue');
+      if (on) {
+        if (!el) {
+          el = document.createElement('div'); el.id='sendArrowCue'; el.className='arrow-cue arrow-cue-red is-anim';
+          const inner = document.createElement('div'); inner.className='arrow-cue-inner'; inner.textContent='↓'; el.appendChild(inner);
+          document.body.appendChild(el);
+        } else if (!el.querySelector('.arrow-cue-inner')) {
+          const inner = document.createElement('div'); inner.className='arrow-cue-inner'; inner.textContent='↓'; el.appendChild(inner);
+        }
+        el.style.display='block'; positionSendArrow();
+        window.addEventListener('resize', positionSendArrow);
+        window.addEventListener('scroll', positionSendArrow, { passive:true });
+        setTimeout(positionSendArrow, 0);
+      } else {
+        if (el) el.style.display='none';
+        window.removeEventListener('resize', positionSendArrow);
+        window.removeEventListener('scroll', positionSendArrow);
+      }
+    } catch(_) {}
+  }
   function showStartPrompt(){
     try {
       let tip = document.getElementById('senderPressStart');
@@ -224,9 +257,12 @@
               // cue for send button when in warning window and not yet sent
               const warnOn = (left <= warn) && !sentThisWindow;
               pulseSend(warnOn);
+              const canShow = warnOn && !(sendBtn?.disabled);
+              try { showSendArrow(canShow); } catch(_) {}
             } else {
               el.style.display = 'none';
               pulseSend(false);
+              try { showSendArrow(false); } catch(_) {}
               if (left === 0 && !sentThisWindow) {
                 showStartPrompt();
               }
@@ -263,7 +299,7 @@
           // start button pulse while waiting; reset send when back to waiting
           pulseStart(window.__overlayWaiting === true);
           showStartArrow(window.__overlayWaiting === true);
-          if (window.__overlayWaiting) { sentThisWindow = false; pulseSend(false); }
+          if (window.__overlayWaiting) { sentThisWindow = false; pulseSend(false); try { showSendArrow(false); } catch(_) {} }
           const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
         }
         // NOTE: overlayDescending is ignored for the tip. Tip is controlled only by overlayWaiting.
@@ -619,7 +655,7 @@
   // ---- Send animation trigger (broadcast to receivers) ----
   sendBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] send button clicked'); } catch(_) {}
-    sentThisWindow = true; pulseSend(false);
+    sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
     if (wsReady) {
       try { console.log('[sender(main)] sending sendAnimation via WS'); ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
