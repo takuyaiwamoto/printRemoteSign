@@ -10,6 +10,8 @@ const qs = new URLSearchParams(location.search);
 const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
 const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
 
+// Default to waiting at startup to suppress countdown until receiver signals active
+window.__overlayWaiting = true;
 const canvasEl = document.getElementById('paint');
 const othersEl = document.getElementById('others');
 const cm = new CanvasManager(canvasEl);

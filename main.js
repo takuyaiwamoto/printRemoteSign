@@ -133,6 +133,8 @@
     });
   }
 
+  // Default to waiting to avoid showing countdown at boot
+  window.__overlayWaiting = true;
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
