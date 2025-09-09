@@ -200,6 +200,7 @@ transport.onmessage = (msg) => {
   }
   // Local preview animation sync with receiver
   if (msg.type === 'sendAnimation') {
+    try { console.log('[sender(esm)] WS sendAnimation received -> start local preview'); } catch(_) {}
     try { startLocalPreviewAnim(); } catch(_) {}
   }
   // strokes from others
@@ -211,7 +212,18 @@ transport.onmessage = (msg) => {
 // ---- SSE fallback (clear only; strokesはWSで十分だが環境次第で拡張可能) ----
 (() => {
   if (!SERVER_URL) return; const toHttp = (u)=> u.replace(/^wss?:\/\//i, (m)=> m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,'');
-  try { const es = new EventSource(`${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`); es.addEventListener('clear', ()=>{ try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); }); } catch(_) {}
+  try {
+    const es = new EventSource(`${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`);
+    es.addEventListener('clear', ()=>{ try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); });
+    es.addEventListener('config', (ev)=>{
+      try { const j = JSON.parse(ev.data); if (j && j.data && Object.prototype.hasOwnProperty.call(j.data,'animKick')) {
+        const ts = Number(j.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
+        const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
+        const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
+        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+      } } catch(_) {}
+    });
+  } catch(_) {}
 })();
 
 // ---- Outgoing strokes ----
@@ -225,7 +237,14 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
 // Hook into send/start buttons to clear pulses on click
-try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} /* preview starts on WS broadcast for all senders */ }); } catch(_) {}
+try { __sendBtn?.addEventListener('click', () => {
+  window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
+  // Fast local prep: clear own canvas immediately (no broadcast)
+  try { console.log('[sender(esm)] send clicked -> local fast clear'); } catch(_) {}
+  try { cm.clear(); } catch(_) {}
+  try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
+  // Preview will start via WS broadcast for all senders
+}); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
 // Ensure the start tip is visible immediately after page reload if waiting
@@ -294,7 +313,7 @@ function startLocalPreviewAnim(){
   try { cm.clear(); } catch(_) {}
   try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
   // Disable local inputs while animating
-  overlay.addEventListener('pointerdown', (e)=> e.preventDefault(), { once: false });
+  overlay.addEventListener('pointerdown', (e)=> { try { console.log('[sender(esm) preview] pointer blocked'); } catch(_) {} e.preventDefault(); }, { once: false });
   // Load candidate video (same as receiver) if B
   if (animType === 'B') {
     const candidates = [
@@ -347,4 +366,18 @@ function startLocalPreviewAnim(){
     inner.style.transform = 'translateY(120%)';
     setTimeout(()=>{ try { overlay.remove(); } catch(_) {} window.__senderPreviewStarted = false; }, moveDur + 30);
   }
+    // animKick kick-off for all senders (WS broadcast)
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
+      const ts = Number(msg.data.animKick)||0;
+      window.__senderAnimKickTs = window.__senderAnimKickTs || 0;
+      const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
+      const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
+      if (ts > window.__senderAnimKickTs && nowT - bootAt > 1500) {
+        window.__senderAnimKickTs = ts;
+        try { console.log('[sender(esm)] config.animKick accepted -> start local preview', ts); } catch(_) {}
+        try { startLocalPreviewAnim(); } catch(_) {}
+      } else {
+        try { console.log('[sender(esm)] config.animKick ignored', { ts, last: window.__senderAnimKickTs, bootDelta: Math.round(nowT-bootAt) }); } catch(_) {}
+      }
+    }
 }
