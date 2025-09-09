@@ -223,6 +223,7 @@ transport.onmessage = (msg) => {
         if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
       } } catch(_) {}
     });
+    es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
   } catch(_) {}
 })();
 
@@ -378,6 +379,18 @@ function startLocalPreviewAnim(){
         try { startLocalPreviewAnim(); } catch(_) {}
       } else {
         try { console.log('[sender(esm)] config.animKick ignored', { ts, last: window.__senderAnimKickTs, bootDelta: Math.round(nowT-bootAt) }); } catch(_) {}
+        try {
+          if ((nowT - bootAt) <= 1500 && !window.__senderAnimKickRetry) {
+            const wait = 1550 - (nowT - bootAt);
+            window.__senderAnimKickRetry = setTimeout(()=>{
+              window.__senderAnimKickRetry = null;
+              if ((window.__senderAnimKickTs||0) < ts && !window.__senderPreviewStarted) {
+                window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] animKick delayed accept after boot'); } catch(_) {}
+                try { startLocalPreviewAnim(); } catch(_) {}
+              }
+            }, Math.max(100, wait));
+          }
+        } catch(_) {}
       }
     }
 }

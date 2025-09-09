@@ -345,6 +345,10 @@
         if (m && m.data) __applySenderAnimConfigFromMsg(m.data);
       } catch(_) {}
     });
+    es.addEventListener('sendAnimation', () => {
+      try { console.log('[sender(main)] SSE sendAnimation -> start local preview'); } catch(_) {}
+      try { startLocalPreviewAnim(); } catch(_) {}
+    });
   }
 
   // Default to waiting to avoid showing countdown at boot
@@ -444,6 +448,19 @@
             try { startLocalPreviewAnim(); } catch(_) {}
           } else {
             try { console.log('[sender(main)] config.animKick ignored', { ts, last: window.__senderAnimKickTs, bootDelta: Math.round(nowT-bootAt) }); } catch(_) {}
+            // If ignored due to boot window, schedule a one-shot retry after the remaining time
+            try {
+              if ((nowT - bootAt) <= 1500 && !window.__senderAnimKickRetry) {
+                const wait = 1550 - (nowT - bootAt);
+                window.__senderAnimKickRetry = setTimeout(()=>{
+                  window.__senderAnimKickRetry = null;
+                  if ((window.__senderAnimKickTs||0) < ts && !window.__senderPreviewStarted) {
+                    window.__senderAnimKickTs = ts; try { console.log('[sender(main)] animKick delayed accept after boot'); } catch(_) {}
+                    try { startLocalPreviewAnim(); } catch(_) {}
+                  }
+                }, Math.max(100, wait));
+              }
+            } catch(_) {}
           }
         }
         if (msg && msg.type === 'config' && msg.data && msg.data.bgSender) {
