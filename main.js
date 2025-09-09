@@ -276,7 +276,8 @@
   selfLayer.ctx.imageSmoothingEnabled = true; selfLayer.ctx.imageSmoothingQuality = 'high';
 
   // 他者描画（共有エンジン）
-  const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas, dpr: DPR, bufferMs: OTHER_BUFFER_MS, eraserScale: ERASER_SCALE }) || null);
+  // Remote strokes already include effective eraser size; avoid double scaling here
+  const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas, dpr: DPR, bufferMs: OTHER_BUFFER_MS, eraserScale: 1.0 }) || null);
   if (SDEBUG) slog('otherEngine', otherEngine ? 'ready' : 'missing');
   function resizeOtherLayers() {
     // 自分レイヤ
