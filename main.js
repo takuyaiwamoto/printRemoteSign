@@ -208,7 +208,8 @@
         }
         if (msg && msg.type === 'stroke') {
           // 他者のストロークのみ反映（自分はローカルで描画済み）
-          if (msg.authorId && msg.authorId === AUTHOR_ID) return;
+          if (msg.authorId && msg.authorId === AUTHOR_ID) { if (SDEBUG) slog('ws stroke (self) ignored', msg.id); return; }
+          if (SDEBUG) slog('ws stroke from', msg.authorId||'unknown', msg.phase, msg.id);
           otherEngine?.handle?.(msg);
         }
         if (msg && msg.type === 'clear') {
