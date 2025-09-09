@@ -20,14 +20,17 @@ export class Transport {
   connect() {
     if (!this.serverUrl) return;
     const url = `${this.toWsBase(this.serverUrl)}/ws?channel=${encodeURIComponent(this.channel)}&role=sender`;
-    try { this.ws = new WebSocket(url); } catch (_) { this.httpFallback = !!this.serverUrl; return; }
-    this.ws.onopen = () => { this.wsReady = true; this.httpFallback = false; };
-    this.ws.onclose = () => { this.wsReady = false; setTimeout(() => this.connect(), 1000); };
-    this.ws.onerror = () => { this.wsReady = false; this.httpFallback = !!this.serverUrl; };
+    try { this.ws = new WebSocket(url); } catch (e) { this.httpFallback = !!this.serverUrl; try { console.warn('[sender(transport)] WS construct error', e?.message||e); } catch(_) {} return; }
+    this.ws.onopen = () => { this.wsReady = true; this.httpFallback = false; try { console.log('[sender(transport)] WS open', { url }); } catch(_) {} };
+    this.ws.onclose = () => { this.wsReady = false; try { console.warn('[sender(transport)] WS close, retrying'); } catch(_) {} setTimeout(() => this.connect(), 1000); };
+    this.ws.onerror = (e) => { this.wsReady = false; this.httpFallback = !!this.serverUrl; try { console.warn('[sender(transport)] WS error', e); } catch(_) {} };
     this.ws.onmessage = (ev) => {
       if (!this.onmessage) return;
       let msg = null; try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null'); } catch(_) {}
-      if (msg) this.onmessage(msg);
+      if (msg) {
+        try { if (msg && msg.type) console.log('[sender(transport)] WS message', msg.type); } catch(_) {}
+        this.onmessage(msg);
+      }
     };
   }
 

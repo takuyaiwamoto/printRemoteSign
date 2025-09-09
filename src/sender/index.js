@@ -34,6 +34,7 @@ otherEngine?.startRAF?.(); (function raf(){ try { compositeOthers(); } catch(_) 
 
 // ---- Networking ----
 const transport = new Transport(SERVER_URL, CHANNEL, { sendIntervalMs: 150 });
+try { console.log('[sender(esm)] boot', { server: SERVER_URL, channel: CHANNEL }); } catch(_) {}
 transport.connect();
 const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
 
@@ -122,6 +123,7 @@ function showSendArrow(on){
 }
 
 transport.onmessage = (msg) => {
+  try { if (msg && msg.type) console.log('[sender(esm)] WS message', msg.type); } catch(_) {}
   if (msg.type === 'config' && msg.data) {
     // cache overlayStaySec for sender preview timing
     if (typeof msg.data.overlayStaySec !== 'undefined') {
@@ -204,7 +206,11 @@ transport.onmessage = (msg) => {
     try { startLocalPreviewAnim(); } catch(_) {}
   }
   // strokes from others
-  if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; otherEngine?.handle?.(msg); }
+  if (msg.type === 'stroke') {
+    if (msg.authorId && msg.authorId === AUTHOR_ID) return; 
+    try { if (msg.phase === 'start' || msg.phase === 'end') console.log('[sender(esm)] WS stroke', msg.phase, { id: msg.id, author: msg.authorId }); } catch(_) {}
+    otherEngine?.handle?.(msg);
+  }
   if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); }
   if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); }
 };
@@ -213,13 +219,18 @@ transport.onmessage = (msg) => {
 (() => {
   if (!SERVER_URL) return; const toHttp = (u)=> u.replace(/^wss?:\/\//i, (m)=> m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,'');
   try {
-    const es = new EventSource(`${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`);
+    const esUrl = `${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`;
+    try { console.log('[sender(esm)] SSE connect', esUrl); } catch(_) {}
+    const es = new EventSource(esUrl);
+    es.onopen = () => { try { console.log('[sender(esm)] SSE open'); } catch(_) {} };
+    es.onerror = (e) => { try { console.warn('[sender(esm)] SSE error', e); } catch(_) {} };
     es.addEventListener('clear', ()=>{ try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); });
     es.addEventListener('stroke', (ev) => {
       try {
         const msg = JSON.parse(ev.data);
         if (!msg || msg.type !== 'stroke') return;
         if (msg.authorId && msg.authorId === AUTHOR_ID) return;
+        try { if (msg.phase==='start' || msg.phase==='end') console.log('[sender(esm)] SSE stroke', msg.phase, { id: msg.id, author: msg.authorId }); } catch(_) {}
         otherEngine?.handle?.(msg);
       } catch(_) {}
     });
