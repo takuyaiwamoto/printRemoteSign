@@ -215,6 +215,14 @@ transport.onmessage = (msg) => {
   try {
     const es = new EventSource(`${toHttp(SERVER_URL)}/events?channel=${encodeURIComponent(CHANNEL)}`);
     es.addEventListener('clear', ()=>{ try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); });
+    es.addEventListener('stroke', (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (!msg || msg.type !== 'stroke') return;
+        if (msg.authorId && msg.authorId === AUTHOR_ID) return;
+        otherEngine?.handle?.(msg);
+      } catch(_) {}
+    });
     es.addEventListener('config', (ev)=>{
       try { const j = JSON.parse(ev.data); if (j && j.data && Object.prototype.hasOwnProperty.call(j.data,'animKick')) {
         const ts = Number(j.data.animKick)||0; const last = (window.__senderAnimKickTs||0);

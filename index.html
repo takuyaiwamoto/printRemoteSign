@@ -85,7 +85,8 @@
         } else {
           var m = document.createElement('script');
           m.type = 'module';
-          m.src = 'src/sender/index.js';
+          // Cache-busting to bypass CDN stale files on Pages
+          m.src = 'src/sender/index.js?v=' + (document.querySelector('meta[name=build-id]')?.content || Date.now());
           document.head.appendChild(m);
         }
       })();
