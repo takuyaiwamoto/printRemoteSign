@@ -501,6 +501,8 @@
       setTimeout(() => {
         const box = canvasBox;
         if (!box) { finish(); return; }
+        // Start twinkle just before moving (animation A has no ink fade-in)
+        try { if (window.ReceiverConfig?.getTwinkleStarsEnabled?.()) startTwinkleStars(); } catch(_) {}
         // Emit confetti right when moving starts (shorter window)
         try { startConfetti(1700); } catch(_) {}
         // animate translateY to push canvas below the window height
@@ -517,6 +519,8 @@
     }, rotateDelay);
 
     function afterMove(){
+      // Stop twinkle then, after configurable sec (default 5s), clear drawings (receiver + senders) and reappear
+      try { stopTwinkleStars(); } catch(_) {}
       // After configurable sec (default 5s), clear drawings (receiver + senders) and reappear
       const repSec = window.ReceiverConfig?.getAnimReappearDelaySec?.();
       const delayMs = (repSec == null) ? 5000 : Math.max(0, Math.round(Number(repSec)||0) * 1000);
@@ -630,6 +634,8 @@
             fadingIn = true;
             fadeInStart = performance.now();
             fadeInStarted = true;
+            // Start twinkle at ink fade-in timing (spec)
+            try { if (window.ReceiverConfig?.getTwinkleStarsEnabled?.()) startTwinkleStars(); } catch(_) {}
           }
           if (fadingIn){ const e=Math.min(1,(performance.now()-fadeInStart)/fadeInDur); inkFadeAlpha = e; if(e>=1){ fadingIn=false; }
           }
@@ -657,6 +663,7 @@
     }, rotateDelay);
 
     function afterMove(){
+      try { stopTwinkleStars(); } catch(_) {}
       const repSec = window.ReceiverConfig?.getAnimReappearDelaySec?.();
       const delayMs = (repSec == null) ? 500 : Math.max(0, Math.round(Number(repSec)||0) * 1000);
       setTimeout(()=>{
@@ -675,6 +682,37 @@
   }
 
   // ---- Fireworks overlay (window-wide, 2D canvas) ----
+  // Twinkle stars overlay (window-wide, subtle)
+  let twRunning = false; let twCanvas = null; let twRaf = 0; let twStars = [];
+  function startTwinkleStars(){
+    if (twRunning) return; twRunning = true;
+    const cv = document.createElement('canvas'); twCanvas = cv;
+    cv.style.position='fixed'; cv.style.inset='0'; cv.style.zIndex='9998'; cv.style.pointerEvents='none';
+    document.body.appendChild(cv);
+    const g = cv.getContext('2d');
+    function fit(){ cv.width = Math.floor((window.innerWidth||800) * DPR); cv.height = Math.floor((window.innerHeight||600) * DPR); cv.style.width='100%'; cv.style.height='100%'; }
+    fit(); const onResize = ()=>fit(); window.addEventListener('resize', onResize);
+    const base = Math.round((cv.width*cv.height) / (180*180));
+    const count = Math.max(60, Math.min(240, base));
+    twStars = new Array(count).fill(0).map(()=>({ x: Math.random()*cv.width, y: Math.random()*cv.height, r: (Math.random()*1.6+0.6)*DPR, a0: Math.random()*Math.PI*2, w: 0.6+Math.random()*0.8, dx:(Math.random()-0.5)*0.08*DPR, dy:(Math.random()-0.5)*0.08*DPR, gold: Math.random()<0.35 }));
+    function step(){
+      g.clearRect(0,0,cv.width,cv.height);
+      for (const s of twStars){
+        s.a0 += s.w*0.02; s.x += s.dx; s.y += s.dy;
+        if (s.x < -10) s.x = cv.width+10; if (s.x > cv.width+10) s.x = -10;
+        if (s.y < -10) s.y = cv.height+10; if (s.y > cv.height+10) s.y = -10;
+        const tw = 0.4 + 0.6*(0.5+0.5*Math.sin(s.a0));
+        g.globalAlpha = tw*0.9;
+        g.fillStyle = s.gold ? '#ffd97a' : '#ffffff';
+        g.beginPath(); g.arc(s.x, s.y, s.r, 0, Math.PI*2); g.fill();
+      }
+      g.globalAlpha = 1;
+      twRaf = requestAnimationFrame(step);
+    }
+    twRaf = requestAnimationFrame(step);
+    startTwinkleStars._cleanup = ()=>{ try{ cancelAnimationFrame(twRaf);}catch(_){} try{window.removeEventListener('resize', onResize);}catch(_){} try{cv.remove();}catch(_){} twRunning=false; twCanvas=null; twStars=[]; };
+  }
+  function stopTwinkleStars(){ if (!twRunning) return; try { startTwinkleStars._cleanup && startTwinkleStars._cleanup(); } catch(_) {} twRunning=false; }
   let fwRunning = false;
   function startFireworks(durationMs = 7000) {
     if (fwRunning) return; fwRunning = true;

@@ -13,7 +13,7 @@
     'animType', 'animAudioVol',
     'overlayStaySec', 'preCountSec', 'overlayWarnSec',
     'rotateReceiver', 'scaleReceiver', 'bgReceiver',
-    'bgSender', 'print', 'animReceiver'
+    'bgSender', 'print', 'animReceiver', 'twinkleStars'
   ];
   const EPHEMERAL_KEYS = [
     EVENTS.preCountStart,
@@ -24,4 +24,3 @@
   ];
   return { EVENTS, PERSISTENT_KEYS, EPHEMERAL_KEYS };
 });
-
