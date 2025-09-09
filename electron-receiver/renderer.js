@@ -61,7 +61,17 @@
   });
 
   // Now that transform vars are defined, wire resize and do initial fit
-  window.addEventListener('resize', () => { log('resize'); fitCanvas(); applyBoxTransform(); try { resizeAuthorLayers(); window.ReceiverConfig?.drawBackground?.(base); } catch(e) { log('drawBackground error on resize', e); } });
+  window.addEventListener('resize', () => {
+    log('resize');
+    // 1) fit canvases to new CSS size
+    fitCanvas();
+    // 2) re-apply receiver transforms (scale/rotate)
+    applyBoxTransform();
+    // 3) resize author layers to match new pixel size
+    try { window.StrokeEngine?.resizeLayers?.(); log('resizeLayers done'); } catch(e) { log('resizeLayers error', e); }
+    // 4) redraw background immediately so it doesn't look blank until next frame
+    try { window.ReceiverConfig?.drawBackground?.(base); log('drawBackground after resize'); } catch(e) { log('drawBackground error on resize', e); }
+  });
   fitCanvas(); applyBoxTransform();
 
   // Realtime stroke rendering state (moved to StrokeEngine)
@@ -396,6 +406,9 @@
       const left = Math.max(0, remain - elapsed);
       publishOverlayRemain(left);
       if (left <= 0) {
+        // Immediately mark session finished and allow next start
+        try { Flow?.reset?.(); } catch(_) {}
+        try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishWaiting?.(true); } catch(_) {}
         // start descending window for ~2.5s
         publishOverlayDescending(true);
         setTimeout(()=> publishOverlayDescending(false), 2500);
@@ -520,6 +533,9 @@
         if (canvasBox) canvasBox.style.transform = '';
         rotationDeg = 180; applyBoxTransform();
         animRunning = false;
+        // Reset flow state for next round and set waiting flag so senders show the tip
+        try { Flow?.reset?.(); } catch(_) {}
+        try { (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL })?.publishWaiting?.(true); } catch(_) {}
       }, delayMs);
     }
     function finish(){ animRunning = false; }
@@ -651,6 +667,9 @@
           fetch(`${httpBase}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST' }).catch(()=>{});
         } catch(_) {}
         window.StrokeEngine?.clearAll?.(); clearCanvas(); if (rotator) rotator.style.transition=''; if (canvasBox) canvasBox.style.transform=''; rotationDeg=180; applyBoxTransform(); animRunning=false;
+        // Reset flow and publish waiting for next round
+        try { Flow?.reset?.(); } catch(_) {}
+        try { (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL })?.publishWaiting?.(true); } catch(_) {}
       }, delayMs);
     }
   }

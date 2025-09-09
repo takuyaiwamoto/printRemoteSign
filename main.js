@@ -49,6 +49,18 @@
   const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
   try { const b = document.getElementById('author-badge'); if (b) b.textContent = `ID:${AUTHOR_ID}`; } catch(_) {}
   let eraserActive = false;
+  // --- Pulse helpers (visual cues) ---
+  const pulseStart = (on)=>{ try { overlayStartBtn?.classList.toggle('btn-pulse-blue', !!on); } catch(_) {} };
+  const pulseSend = (on)=>{ try { sendBtn?.classList.toggle('btn-pulse-red', !!on); } catch(_) {} };
+  let sentThisWindow = false; // reset when waiting or new session starts
+  function showStartPrompt(){
+    try {
+      let tip = document.getElementById('senderPressStart');
+      if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+      tip.style.display = 'grid';
+      pulseStart(true);
+    } catch(_) {}
+  }
 
   // 背景と自分/他者レイヤ構成
   let bgMode = 'white';
@@ -69,6 +81,7 @@
 
   // 他者描画（共有エンジン）
   const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas, dpr: DPR, bufferMs: OTHER_BUFFER_MS, eraserScale: ERASER_SCALE }) || null);
+  if (SDEBUG) slog('otherEngine', otherEngine ? 'ready' : 'missing');
   function resizeOtherLayers() {
     // 自分レイヤ
     {
@@ -96,6 +109,18 @@
   function setStrokeStyle(c) { c.lineJoin='round'; c.lineCap='round'; c.strokeStyle = brushColor; c.lineWidth = (eraserActive?ERASER_SCALE:1.0) * brushSizeCssPx * DPR; }
   // 他者ストロークの描画ループは共有エンジンに任せる
   otherEngine?.startRAF?.();
+  // Ensure remote strokes are visible even when local user is idle
+  let __composeTick = 0;
+  (function __composeRAF(){
+    try {
+      composeOthers();
+      if ((++__composeTick % 30) === 0) {
+        const st = otherEngine?.getStats?.();
+        if (st) slog('compose frame', st);
+      }
+    } catch(_) {}
+    requestAnimationFrame(__composeRAF);
+  })();
 
   // --- Transport helpers -------------------------------------------------
   const toHttpBase = (u) => u.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://').replace(/\/$/, '');
@@ -121,7 +146,12 @@
         const msg = JSON.parse(ev.data);
         if (msg.authorId && msg.authorId === AUTHOR_ID) return;
         if (!msg || msg.type !== 'stroke') return;
-        otherEngine?.handle?.(msg); if (SDEBUG && msg.phase==='start') slog('sse other start', { id: msg.id, author: msg.authorId });
+        otherEngine?.handle?.(msg);
+        if (SDEBUG) {
+          if (msg.phase === 'start') slog('sse other start', { id: msg.id, author: msg.authorId });
+          else if (msg.phase === 'point') { if (!window.__dbgPointC) window.__dbgPointC = 0; if ((++window.__dbgPointC % 15) === 0) slog('sse other point', { id: msg.id }); }
+          else if (msg.phase === 'end') slog('sse other end', { id: msg.id });
+        }
       } catch(_) {}
     });
     es.addEventListener('clear', () => {
@@ -159,7 +189,16 @@
               const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
               if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
               else { el.style.color = '#fff'; el.style.textShadow = '0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6'; }
-            } else { el.style.display = 'none'; }
+              // cue for send button when in warning window and not yet sent
+              const warnOn = (left <= warn) && !sentThisWindow;
+              pulseSend(warnOn);
+            } else {
+              el.style.display = 'none';
+              pulseSend(false);
+              if (left === 0 && !sentThisWindow) {
+                showStartPrompt();
+              }
+            }
           }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountStart')) {
           try {
@@ -189,6 +228,9 @@
         }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
           window.__overlayWaiting = !!msg.data.overlayWaiting;
+          // start button pulse while waiting; reset send when back to waiting
+          pulseStart(window.__overlayWaiting === true);
+          if (window.__overlayWaiting) { sentThisWindow = false; pulseSend(false); }
           const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
         }
         // NOTE: overlayDescending is ignored for the tip. Tip is controlled only by overlayWaiting.
@@ -543,6 +585,7 @@
   // ---- Send animation trigger (broadcast to receivers) ----
   sendBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] send button clicked'); } catch(_) {}
+    sentThisWindow = true; pulseSend(false);
     if (wsReady) {
       try { console.log('[sender(main)] sending sendAnimation via WS'); ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {
@@ -565,6 +608,7 @@
   // ---- Overlay start trigger (for overlay window) ----
   overlayStartBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] overlay start button clicked'); } catch(_) {}
+    pulseStart(false); sentThisWindow = false; // entering session
     if (wsReady) {
       try { console.log('[sender(main)] sending overlayStart via WS'); ws.send(JSON.stringify({ type: 'overlayStart' })); } catch (_) {}
       // 互換性のため config でもキックを送る
@@ -577,6 +621,22 @@
       fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: { overlayKick: Date.now() } }) }).catch(()=>{});
     }
   });
+
+  // Ensure the start tip is visible on reload while waiting
+  try {
+    if (window.__overlayWaiting) {
+      let tip = document.getElementById('senderPressStart');
+      if (!tip) {
+        tip = document.createElement('div'); tip.id='senderPressStart';
+        tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
+        const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください';
+        tip.appendChild(t); document.body.appendChild(tip);
+      }
+      tip.style.display = 'grid';
+      pulseStart(true);
+      const el = document.getElementById('senderCountdown'); if (el) el.style.display = 'none';
+    }
+  } catch(_) {}
 
   eraserBtn?.addEventListener('click', () => {
     eraserActive = !eraserActive;

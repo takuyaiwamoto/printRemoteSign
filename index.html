@@ -64,10 +64,24 @@
     <script>
       (function(){
         var isFile = location.protocol === 'file:';
+        var sdebug = (new URLSearchParams(location.search)).get('sdebug') === '1';
         if (isFile) {
-          var s = document.createElement('script');
-          s.src = 'main.js';
-          document.head.appendChild(s);
+          // file:// では ESModules が読み込めないため、UMD版の共有ライブラリを順に読み込んでから main.js を起動
+          var files = [
+            'src/sender/shared/constants.js',
+            'src/sender/shared/pointer.js',
+            'src/sender/shared/layout.js',
+            'src/sender/shared/otherStrokes.js',
+            'main.js'
+          ];
+          (function load(i){
+            if (i >= files.length) return;
+            var tag = document.createElement('script');
+            tag.src = files[i];
+            tag.onload = function(){ if (sdebug) try { console.log('[loader] loaded', files[i]); } catch(_) {} load(i+1); };
+            tag.onerror = function(){ if (sdebug) try { console.warn('[loader] failed', files[i]); } catch(_) {} load(i+1); };
+            document.head.appendChild(tag);
+          })(0);
         } else {
           var m = document.createElement('script');
           m.type = 'module';

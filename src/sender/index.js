@@ -40,6 +40,21 @@ const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
 const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 let __lastPreCountTs = 0;
 
+// --- UI elements for cues ---
+const __sendBtn = (()=>{ try { return document.getElementById('btn-send'); } catch(_) { return null; } })();
+const __startBtn = (()=>{ try { return document.getElementById('btn-overlay-start'); } catch(_) { return null; } })();
+function pulseStart(on){ try { __startBtn?.classList.toggle('btn-pulse-blue', !!on); } catch(_) {} }
+function pulseSend(on){ try { __sendBtn?.classList.toggle('btn-pulse-red', !!on); } catch(_) {} }
+window.__sentThisWindow = false;
+function showStartPrompt(){
+  try {
+    let tip = document.getElementById('senderPressStart');
+    if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+    tip.style.display = 'grid';
+    pulseStart(true);
+  } catch(_) {}
+}
+
 transport.onmessage = (msg) => {
   if (msg.type === 'config' && msg.data) {
     // Background
@@ -63,6 +78,9 @@ transport.onmessage = (msg) => {
     // waiting tip + flag
     if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayWaiting')) {
       window.__overlayWaiting = !!msg.data.overlayWaiting;
+      // Start button pulse while waiting
+      pulseStart(window.__overlayWaiting === true);
+      if (window.__overlayWaiting) { window.__sentThisWindow = false; pulseSend(false); }
       let tip = document.getElementById('senderPressStart');
       if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
       tip.style.display = window.__overlayWaiting ? 'grid' : 'none';
@@ -80,7 +98,18 @@ transport.onmessage = (msg) => {
         const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
         if (left <= warn) { el.style.color='#fca5a5'; el.style.textShadow='0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
         else { el.style.color='#fff'; el.style.textShadow='0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6'; }
-      } else { el.style.display='none'; }
+        // Send button pulse when in warn window and not yet sent
+        const warnOn = (left <= Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))))) && !window.__sentThisWindow;
+        pulseSend(warnOn);
+      } else {
+        // countdown ended or waiting state: hide and reset cues
+        el.style.display='none';
+        pulseSend(false);
+        if (left === 0 && !window.__sentThisWindow) {
+          // Encourage to press start again immediately
+          showStartPrompt();
+        }
+      }
     }
   }
   // strokes from others
@@ -105,4 +134,22 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
+// Hook into send/start buttons to clear pulses on click
+try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); }); } catch(_) {}
+try { __startBtn?.addEventListener('click', () => { pulseStart(false); window.__sentThisWindow = false; }); } catch(_) {}
 
+// Ensure the start tip is visible immediately after page reload if waiting
+try {
+  if (window.__overlayWaiting) {
+    let tip = document.getElementById('senderPressStart');
+    if (!tip) {
+      tip = document.createElement('div'); tip.id='senderPressStart';
+      tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
+      const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください';
+      tip.appendChild(t); document.body.appendChild(tip);
+    }
+    tip.style.display = 'grid';
+    pulseStart(true);
+    const cd = document.getElementById('senderCountdown'); if (cd) cd.style.display='none';
+  }
+} catch(_) {}
