@@ -110,7 +110,8 @@
               // メッセージは消してカウントのみ表示（class と style の両方で確実に非表示）
               if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display = 'none'; }
               if (preCount) { preCount.classList.remove('hidden'); preCount.style.display = 'block'; }
-              let n = 3; if (preCount) preCount.textContent = String(n);
+              const preN = Math.max(0, Math.round(window.__preCountSec||3));
+              let n = preN; if (preCount) preCount.textContent = String(n||0);
               if (preTimer) { clearInterval(preTimer); preTimer = null; }
               preTimer = setInterval(() => {
                 n -= 1;
@@ -124,12 +125,19 @@
           es.addEventListener('config', (ev) => { try {
             const j = JSON.parse(ev.data);
             if (j && j.data) {
-              if (typeof j.data.overlayStaySec !== 'undefined') { const v = Number(j.data.overlayStaySec); if (isFinite(v)) window.__overlayStaySec = Math.max(1, Math.min(60, Math.round(v))); }
+              if (typeof j.data.overlayStaySec !== 'undefined') { const v = Number(j.data.overlayStaySec); if (isFinite(v)) window.__overlayStaySec = Math.max(5, Math.min(120, Math.round(v))); }
+              if (typeof j.data.preCountSec !== 'undefined') { const v = Number(j.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
+              if (typeof j.data.overlayWarnSec !== 'undefined') { const v = Number(j.data.overlayWarnSec); if (isFinite(v)) window.__warnSec = Math.max(0, Math.min(60, Math.round(v))); }
               if (typeof j.data.overlayRemainSec !== 'undefined') {
                 const left = Math.max(0, Math.floor(Number(j.data.overlayRemainSec)||0));
                 const el = document.getElementById('ovCount');
                 if (el) {
-                  if (overlayActive && left > 0) { el.style.display='block'; el.textContent = left + '秒'; }
+                  if (overlayActive && left > 0) {
+                    el.style.display='block'; el.textContent = left + '秒';
+                    const warn = Math.max(0, Math.round(window.__warnSec||10));
+                    if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444, 0 0 22px #ef4444, 0 0 34px #ef4444'; }
+                    else { el.style.color = '#fff'; el.style.textShadow = '0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6'; }
+                  }
                   else { el.style.display='none'; }
                 }
                 // When countdown hits 0, start moving back down immediately

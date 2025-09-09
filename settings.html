@@ -52,6 +52,25 @@
         </div>
       </div>
       <div class="row">
+        <div class="panel">
+          <div class="head">カウント設定</div>
+          <div style="display:grid; gap:8px;">
+            <label>開始前カウント（秒 0-10）
+              <input id="preCountSec" type="range" min="0" max="10" value="3" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="preCountSecVal">3</span>s</span>
+            </label>
+            <label>上昇後カウント（秒 5-120）
+              <input id="stayCountSec" type="range" min="5" max="120" value="5" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="stayCountSecVal">5</span>s</span>
+            </label>
+            <label>警告色開始（残り秒 0-60）
+              <input id="warnCountSec" type="range" min="0" max="60" value="10" step="1" style="width:320px;">
+              <span class="muted">現在: <span id="warnCountSecVal">10</span>s</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="row">
         <div class="panel" id="printPanel">
           <div class="head">印刷設定</div>
           <div style="display:grid; gap:8px;">

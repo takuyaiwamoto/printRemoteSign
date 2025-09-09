@@ -32,7 +32,30 @@ transport.onmessage = (msg) => {
       if (typeof msg.data.bgSender === 'string') { cm.setBackgroundWhite(); }
       else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) { cm.setBackgroundImage(msg.data.bgSender.url); }
     }
-    // Overlay countdown relay for senders
+    // Pre-count 3-2-1 in center for all senders
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'preCountStart')) {
+      let pc = document.getElementById('senderPreCount');
+      if (!pc) {
+        pc = document.createElement('div'); pc.id = 'senderPreCount';
+        pc.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;z-index:10000;pointer-events:none;';
+        const inner = document.createElement('div');
+        inner.id = 'senderPreCountNum';
+        inner.style.cssText = 'font-size:160px;font-weight:900;color:#fff;text-shadow:0 0 14px #3b82f6,0 0 26px #3b82f6,0 0 40px #3b82f6;';
+        inner.textContent = '3'; pc.appendChild(inner);
+        document.body.appendChild(pc);
+      }
+      const num = document.getElementById('senderPreCountNum') || pc.firstChild;
+      let n = Math.max(0, Math.round(Number(window.__preCountSec||3)));
+      pc.style.display = 'grid'; num.textContent = String(n || 0);
+      if (window.__senderPreTimer) { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; }
+      window.__senderPreTimer = setInterval(()=>{
+        n -= 1; if (n > 0) { num.textContent = String(n); }
+        else { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; pc.style.display='none'; }
+      }, 1000);
+    }
+    if (typeof msg.data.overlayWarnSec !== 'undefined') { const v=Number(msg.data.overlayWarnSec); if (isFinite(v)) window.__overlayWarnSec = Math.max(0, Math.min(60, Math.round(v))); }
+    if (typeof msg.data.preCountSec !== 'undefined') { const v=Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
+    // Overlay countdown relay for senders (with warn color)
     if (typeof msg.data.overlayRemainSec !== 'undefined') {
       const left = Math.max(0, Math.floor(Number(msg.data.overlayRemainSec)||0));
       let el = document.getElementById('senderCountdown');
@@ -41,8 +64,12 @@ transport.onmessage = (msg) => {
         el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;font-size:44px;color:#fff;text-shadow:0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6;pointer-events:none;';
         el.textContent = '終了まで0秒'; document.body.appendChild(el);
       }
-      if (left > 0) { el.style.display = 'block'; el.textContent = `終了まで${left}秒`; }
-      else { el.style.display = 'none'; }
+      if (left > 0) {
+        el.style.display = 'block'; el.textContent = `終了まで${left}秒`;
+        const warn = Math.max(0, Math.min(60, Math.round(Number(window.__overlayWarnSec||10))));
+        if (left <= warn) { el.style.color = '#fca5a5'; el.style.textShadow = '0 0 10px #ef4444,0 0 22px #ef4444,0 0 34px #ef4444'; }
+        else { el.style.color = '#fff'; el.style.textShadow = '0 0 8px #3b82f6,0 0 16px #3b82f6,0 0 24px #3b82f6'; }
+      } else { el.style.display = 'none'; }
     }
   }
   if (msg.type === 'stroke') {
@@ -100,3 +127,23 @@ cm.onStrokeEnd = ({ id }) => {
 };
 
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
+    // Pre-count 3-2-1 in center for all senders
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'preCountStart')) {
+      let pc = document.getElementById('senderPreCount');
+      if (!pc) {
+        pc = document.createElement('div'); pc.id = 'senderPreCount';
+        pc.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;z-index:10000;pointer-events:none;';
+        const inner = document.createElement('div');
+        inner.id = 'senderPreCountNum';
+        inner.style.cssText = 'font-size:160px;font-weight:900;color:#fff;text-shadow:0 0 14px #3b82f6,0 0 26px #3b82f6,0 0 40px #3b82f6;';
+        inner.textContent = '3'; pc.appendChild(inner);
+        document.body.appendChild(pc);
+      }
+      const num = document.getElementById('senderPreCountNum') || pc.firstChild;
+      let n = 3; pc.style.display = 'grid'; num.textContent = String(n);
+      if (window.__senderPreTimer) { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; }
+      window.__senderPreTimer = setInterval(()=>{
+        n -= 1; if (n > 0) { num.textContent = String(n); }
+        else { clearInterval(window.__senderPreTimer); window.__senderPreTimer = null; pc.style.display='none'; }
+      }, 1000);
+    }

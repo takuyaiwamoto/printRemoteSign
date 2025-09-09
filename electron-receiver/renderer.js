@@ -336,14 +336,23 @@
         try { console.log('[receiver] overlayStart received (renderer)'); } catch(_) {}
         if (overlayRunning) { try { console.log('[receiver] overlay already running; ignore'); } catch(_) {} return; }
         overlayRunning = true;
-        // play audio immediately; start overlay move & countdown exactly 3s after start
+        // play audio immediately; start overlay move & countdown exactly preCountSec after start
         try { playCountdownAudio(); } catch(_) {}
         // notify overlay to show big 3-2-1 immediately
         try { window.OverlayPreCount?.notify?.(); } catch(_) {}
+        // broadcast pre-count start to all senders in channel
+        try {
+          const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
+            .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
+          const data = { preCountStart: Date.now() };
+          fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
+            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+        } catch(_) {}
+        const preDelayMs = Math.max(0, Math.round(Number(window.ReceiverConfig?.getPreCountSec?.()||3))) * 1000;
         setTimeout(() => {
           try { window.OverlayBridge?.triggerStart?.(); } catch(_) {}
           startOverlayCountdown();
-        }, 3000);
+        }, preDelayMs);
       }
     },
     setStatus: (t) => setStatus(t),
@@ -361,7 +370,12 @@
     try {
       const recvCd = document.getElementById('recvCountdown');
       if (recvCd) {
-        if (sec > 0) { recvCd.style.display = 'block'; recvCd.textContent = `${sec}秒`; }
+        if (sec > 0) {
+          recvCd.style.display = 'block'; recvCd.textContent = `${sec}秒`;
+          const warn = Math.max(0, Math.round(Number(window.ReceiverConfig?.getOverlayWarnSec?.()||10)));
+          if (sec <= warn) { recvCd.style.color = '#fca5a5'; recvCd.style.textShadow = '0 0 10px #ef4444, 0 0 22px #ef4444, 0 0 34px #ef4444'; }
+          else { recvCd.style.color = '#fff'; recvCd.style.textShadow = '0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6'; }
+        }
         else { recvCd.style.display = 'none'; }
       }
       const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)

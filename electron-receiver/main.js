@@ -135,7 +135,8 @@ ipcMain.on('print-ink', async (ev, payload) => {
             '-o', 'MediaType=stationery',
             '-o', 'InputSlot=tray-1',
             '-o', 'print-quality=Normal',
-            // If needed, uncomment to force page size: '-o', 'PageSize=Postcard',
+            // Force page size to L (3.5x5 inch) to match tray setting
+            '-o', 'PageSize=3.5x5',
             tmp
           ];
           console.log('[print][lp] exec lp', args.join(' '));
@@ -175,12 +176,14 @@ ipcMain.on('print-ink', async (ev, payload) => {
         const deviceName = found?.name || alt?.name;
         if (!deviceName) console.warn('[print] target printer not found; using system default');
         else console.log('[print] using printer:', deviceName);
+        // Fallback renderer print: also set L size (3.5x5 inch)
         win.webContents.print({
           silent: true,
           deviceName,
           printBackground: true,
           margins: { marginType: 'none' },
-          pageSize: { width: 100000, height: 148000 }, // Postcard 100x148mm in microns
+          // L size = 3.5 x 5.0 inch ≒ 88.9 x 127.0 mm
+          pageSize: { width: 88900, height: 127000 },
           landscape: false,
         }, (success, errorType) => {
           try { win.close(); } catch(_) {}

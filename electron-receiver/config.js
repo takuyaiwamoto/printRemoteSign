@@ -15,6 +15,8 @@
   let rotateDegState = 180; // track latest applied rotation (0 or 180)
   let printRotate180 = null; // explicit print rotation override (null=follow screen rotation)
   let overlayStaySec = 5; // seconds the image stays up before coming back
+  let preCountSec = 3; // seconds for pre-count before moving up
+  let overlayWarnSec = 10; // warn color threshold (remaining seconds)
   let lastAnimKick = 0;
   let bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -117,6 +119,19 @@
       animAudioVol = v;
       log('anim audio vol', animAudioVol);
     }
+    if (typeof data.preCountSec !== 'undefined') {
+      const v = Number(data.preCountSec); if (isFinite(v)) preCountSec = Math.max(0, Math.min(10, Math.round(v)));
+      log('preCountSec', preCountSec);
+    }
+    if (typeof data.overlayStaySec !== 'undefined') {
+      const s = Number(data.overlayStaySec);
+      if (isFinite(s)) overlayStaySec = Math.max(5, Math.min(120, Math.round(s)));
+      log('overlay stay sec', overlayStaySec);
+    }
+    if (typeof data.overlayWarnSec !== 'undefined') {
+      const w = Number(data.overlayWarnSec); if (isFinite(w)) overlayWarnSec = Math.max(0, Math.min(60, Math.round(w)));
+      log('overlay warn sec', overlayWarnSec);
+    }
     if (typeof data.animKick !== 'undefined') {
       const ts = Number(data.animKick) || 0;
       const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -140,6 +155,8 @@
   function getRotateDeg() { return rotateDegState; }
   function getPrintRotate180() { return printRotate180; }
   function getOverlayStaySec() { return overlayStaySec; }
+  function getPreCountSec() { return preCountSec; }
+  function getOverlayWarnSec() { return overlayWarnSec; }
 
-  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg, getPrintRotate180, getOverlayStaySec };
+  window.ReceiverConfig = { init, drawBackground, applyConfig, getAnimDelays, getAnimType, getAnimAudioVol, getAnimReappearDelaySec, getPrintDelaySec, getRotateDeg, getPrintRotate180, getOverlayStaySec, getPreCountSec, getOverlayWarnSec };
 })();

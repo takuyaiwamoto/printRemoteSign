@@ -152,6 +152,12 @@
   const animRV = document.getElementById('animDelayReappearVal');
   const printDelay = document.getElementById('printDelaySec');
   const printDelayVal = document.getElementById('printDelayVal');
+  const preCountSec = document.getElementById('preCountSec');
+  const preCountSecVal = document.getElementById('preCountSecVal');
+  const stayCountSec = document.getElementById('stayCountSec');
+  const stayCountSecVal = document.getElementById('stayCountSecVal');
+  const warnCountSec = document.getElementById('warnCountSec');
+  const warnCountSecVal = document.getElementById('warnCountSecVal');
   const printRotate180 = document.getElementById('printRotate180');
   let atimer = null;
   function pushAnim(){ clearTimeout(atimer); atimer = setTimeout(()=> sendAnimDelays(animX.value, animZ.value), 150); }
@@ -170,6 +176,23 @@
     clearTimeout(ptimer);
     ptimer = setTimeout(()=> sendPrintDelay(printDelay.value), 150);
   });
+
+  // Count settings broadcast
+  function sendCountSettings(pre, stay, warn){
+    const p = Math.max(0, Math.min(10, Math.round(Number(pre)||0)));
+    const s = Math.max(5, Math.min(120, Math.round(Number(stay)||5)));
+    const w = Math.max(0, Math.min(60, Math.round(Number(warn)||10)));
+    const data = { preCountSec: p, overlayStaySec: s, overlayWarnSec: w };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  }
+  let ctimer = null;
+  const pushCounts = ()=>{ clearTimeout(ctimer); ctimer=setTimeout(()=> sendCountSettings(preCountSec?.value, stayCountSec?.value, warnCountSec?.value), 150); };
+  preCountSec?.addEventListener('input', ()=>{ preCountSecVal.textContent = preCountSec.value; pushCounts(); });
+  stayCountSec?.addEventListener('input', ()=>{ stayCountSecVal.textContent = stayCountSec.value; pushCounts(); });
+  warnCountSec?.addEventListener('input', ()=>{ warnCountSecVal.textContent = warnCountSec.value; pushCounts(); });
 
   printRotate180?.addEventListener('change', ()=>{
     sendPrintRotate180(printRotate180.checked);
