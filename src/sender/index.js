@@ -123,6 +123,10 @@ function showSendArrow(on){
 
 transport.onmessage = (msg) => {
   if (msg.type === 'config' && msg.data) {
+    // cache overlayStaySec for sender preview timing
+    if (typeof msg.data.overlayStaySec !== 'undefined') {
+      const s = Number(msg.data.overlayStaySec); if (isFinite(s)) window.__senderOverlayStaySec = Math.max(0, Math.min(120, Math.round(s)));
+    }
     // cache anim settings for preview (follow receiver)
     try {
       if (typeof msg.data.animType === 'string') {
@@ -221,7 +225,7 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
 // Hook into send/start buttons to clear pulses on click
-try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} setTimeout(()=>{ try{ startLocalPreviewAnim(); } catch(_){} }, 400); }); } catch(_) {}
+try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} /* preview starts on WS broadcast for all senders */ }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
 // Ensure the start tip is visible immediately after page reload if waiting
@@ -314,6 +318,7 @@ function startLocalPreviewAnim(){
   const rotateDur = 1000, moveDur = 1500;
   const rotateDelay = Math.max(0, Math.min(10, Number(window.__senderAnimDelayRotate||0))) * 1000;
   const moveDelay = Math.max(0, Math.min(10, Number(window.__senderAnimDelayMove||0))) * 1000;
+  const stayDelay = Math.max(0, Math.min(120, Number(window.__senderOverlayStaySec||0))) * 1000;
 
   setTimeout(()=>{
     // Sender side: do not rotate visually; just align timing
@@ -330,12 +335,12 @@ function startLocalPreviewAnim(){
         const t = performance.now();
         if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
           clearInterval(poll); fadeIn();
-          setTimeout(()=> startMove(), moveDelay);
+          setTimeout(()=> startMove(), stayDelay + moveDelay);
         }
       }, 100);
     } else {
-      // A: move after rotateDur + moveDelay (no rotation)
-      setTimeout(()=> startMove(), rotateDur + moveDelay);
+      // A: move after rotateDur + stayDelay + moveDelay (no rotation)
+      setTimeout(()=> startMove(), rotateDur + stayDelay + moveDelay);
     }
   }, rotateDelay);
 
