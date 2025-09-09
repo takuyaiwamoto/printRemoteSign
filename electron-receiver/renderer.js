@@ -362,11 +362,8 @@
   net?.start?.();
   // At idle boot, indicate waiting state so senders show tip immediately
   try {
-    const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
-      .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
-    const data = { overlayWaiting: true };
-    fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
-      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+    const BusInit = (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL });
+    BusInit?.publishWaiting?.(true);
   } catch(_) {}
 
   // ---- Overlay countdown broadcast ----
@@ -386,21 +383,11 @@
         }
         else { recvCd.style.display = 'none'; }
       }
-      const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
-        .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
-      const data = { overlayRemainSec: Math.max(0, Math.floor(sec)) };
-      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
-        { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+      try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishRemain?.(sec); } catch(_) {}
     } catch(_) {}
   }
   function publishOverlayDescending(on){
-    try {
-      const httpBase = (window.ReceiverNet?.create?.({server:SERVER, channel:CHANNEL})?.util?.toHttpBase?.(SERVER) || SERVER)
-        .replace(/^wss?:\/\//,'https://').replace(/\/$/,'');
-      const data = { overlayDescending: !!on };
-      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`,
-        { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
-    } catch(_) {}
+    try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishDescending?.(on); } catch(_) {}
   }
   function startOverlayCountdown(){
     stopOverlayCountdown();
