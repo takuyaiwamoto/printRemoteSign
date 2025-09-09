@@ -169,6 +169,9 @@
     if (__S_PREVIEW_ANIM_TYPE === 'B') {
       if (!vid) { vid=document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
       vid.muted=true; vid.playsInline=true; vid.preload='auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+      // create freeze canvas for last frame capture
+      let vfreeze = document.getElementById('senderAnimVideoFreeze');
+      if (!vfreeze) { vfreeze = document.createElement('canvas'); vfreeze.id='senderAnimVideoFreeze'; vfreeze.style.cssText='position:absolute;inset:0;width:100%;height:100%;z-index:1;display:none;'; inner.appendChild(vfreeze); }
       const candidates=[
         'electron-receiver/assets/backVideo1.mp4',
         '../electron-receiver/assets/backVideo1.mp4',

@@ -318,10 +318,8 @@ wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLaye
 // Hook into send/start buttons to clear pulses on click
 try { __sendBtn?.addEventListener('click', () => {
   window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
-  // Fast local prep: clear own canvas immediately (no broadcast)
-  try { console.log('[sender(esm)] send clicked -> local fast clear'); } catch(_) {}
-  try { cm.clear(); } catch(_) {}
-  try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
+  // NOTE: Fast local clear disabled to avoid blank snapshot on sender during animation
+  try { console.log('[sender(esm)] send clicked'); } catch(_) {}
   // Preview will start via WS broadcast for all senders
 }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
@@ -372,7 +370,7 @@ function startLocalPreviewAnim(){
   const animType = (window.__senderAnimType === 'A') ? 'A' : 'B';
   if (animType === 'B') {
     if (!vid) { vid = document.createElement('video'); vid.id='senderAnimVideo'; inner.appendChild(vid); }
-    vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+    vid.muted = true; vid.playsInline = true; vid.preload = 'auto'; vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
   } else { try { if (vid) vid.remove(); } catch(_) {} vid = null; }
   // Ink-only snapshot (self + others) — fade like receiver
   const inkSnap = document.createElement('canvas'); inkSnap.width = canvasEl.width; inkSnap.height = canvasEl.height;
@@ -387,7 +385,7 @@ function startLocalPreviewAnim(){
   if (!inkImg) { inkImg = document.createElement('canvas'); inkImg.id='senderAnimInk'; inner.appendChild(inkImg); }
   inkImg.width = inkSnap.width; inkImg.height = inkSnap.height;
   const sg = inkImg.getContext('2d'); sg.clearRect(0,0,inkImg.width,inkImg.height); sg.drawImage(inkSnap,0,0);
-  inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;';
+  inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
   // Clear local canvas before move (do not broadcast)
   try { cm.clear(); } catch(_) {}
   try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
@@ -425,7 +423,33 @@ function startLocalPreviewAnim(){
   if (animType === 'B') {
     // fade-out ink for 2s, then fade-in at earliest of video end or 10s
     try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; console.log('[sender(esm) preview] ink fade-out start'); } catch(_) {}
-    let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; try { const d=Number(vid.duration||0); vid.pause(); if (isFinite(d) && d>0) { try { vid.currentTime = Math.max(0, d - 0.05); } catch(_) {} } console.log('[sender(esm) preview] video ended + paused at last frame', { duration: d }); } catch(_) {} try { console.log('[sender(esm) preview] schedule move(B)', { moveDelay }); } catch(_) {} setTimeout(()=> startMove(), moveDelay); }; } catch(_) {} }
+    // Prepare freeze canvas for last video frame
+    let vidFreeze = document.getElementById('senderAnimVideoFreeze');
+    if (!vidFreeze) { vidFreeze = document.createElement('canvas'); vidFreeze.id = 'senderAnimVideoFreeze'; vidFreeze.style.cssText='position:absolute;inset:0;width:100%;height:100%;z-index:1;display:none;'; inner.appendChild(vidFreeze); }
+    let videoEnded = false; if (vid) {
+      try {
+        vid.onended = ()=>{
+          videoEnded = true;
+          try {
+            const sw = vid.videoWidth||0, sh = vid.videoHeight||0;
+            const cw = inkImg.width || inkSnap.width, ch = inkImg.height || inkSnap.height;
+            // cover-fit compute
+            let sx=0, sy=0, sWidth=sw, sHeight=sh;
+            const sRatio = sw/sh, cRatio = cw/ch;
+            if (sRatio > cRatio) { sWidth = sh*cRatio; sx = (sw - sWidth)/2; } else if (sRatio < cRatio) { sHeight = sw/cRatio; sy = (sh - sHeight)/2; }
+            vidFreeze.width = cw; vidFreeze.height = ch;
+            const k = vidFreeze.getContext('2d'); k.clearRect(0,0,cw,ch);
+            // draw last frame
+            k.drawImage(vid, sx, sy, sWidth, sHeight, 0, 0, cw, ch);
+            // hide video, show freeze
+            vid.style.display = 'none'; vidFreeze.style.display = 'block';
+            console.log('[sender(esm) preview] video ended -> freeze canvas drawn');
+          } catch(e){ try { console.warn('[sender(esm) preview] freeze draw failed', e); } catch(_) {} }
+          try { console.log('[sender(esm) preview] schedule move(B)', { moveDelay }); } catch(_) {}
+          setTimeout(()=> startMove(), moveDelay);
+        };
+      } catch(_) {}
+    }
     const startedAt = performance.now();
     const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; console.log('[sender(esm) preview] ink fade-in start'); setTimeout(()=>{ try { console.log('[sender(esm) preview] ink fade-in done'); } catch(_) {} }, 450); } catch(_) {} };
       const poll = setInterval(()=>{
