@@ -121,6 +121,7 @@
 
   // ---- Local preview overlay (video + current drawing) synced by sendAnimation ----
   function startLocalPreviewAnim(){
+    if (window.__senderPreviewStarted) return; window.__senderPreviewStarted = true;
     const wrapEl = document.getElementById('canvas-wrap') || wrap;
     if (!wrapEl) return;
     let overlay = document.getElementById('senderAnimOverlay');
@@ -147,7 +148,7 @@
     (async()=>{ let ok=false; for(const url of candidates){ try{ await new Promise((res,rej)=>{ const onOk=()=>{ cleanup(); res(); }; const onErr=()=>{ cleanup(); rej(new Error('e')); }; function cleanup(){ vid.removeEventListener('loadedmetadata', onOk); vid.removeEventListener('error', onErr);} vid.addEventListener('loadedmetadata', onOk, {once:true}); vid.addEventListener('error', onErr, {once:true}); vid.src=url; vid.load(); }); ok=true; break; } catch(_){} } try{ if(ok) await vid.play().catch(()=>{});}catch(_){} })();
     // animate
     inner.style.transform='rotate(0deg) translateY(0)'; inner.style.transition='transform 1000ms ease'; requestAnimationFrame(()=>{ inner.style.transform='rotate(180deg) translateY(0)'; });
-    setTimeout(()=>{ inner.style.transition='transform 1500ms ease'; inner.style.transform='rotate(180deg) translateY(120%)'; setTimeout(()=>{ try{ overlay.remove(); }catch(_){} }, 1500+30); }, 1000+20);
+    setTimeout(()=>{ inner.style.transition='transform 1500ms ease'; inner.style.transform='rotate(180deg) translateY(120%)'; setTimeout(()=>{ try{ overlay.remove(); }catch(_){} window.__senderPreviewStarted=false; }, 1500+30); }, 1000+20);
   }
   function showStartPrompt(){
     try {
@@ -690,6 +691,7 @@
   sendBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] send button clicked'); } catch(_) {}
     sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
+    setTimeout(()=>{ try{ startLocalPreviewAnim(); } catch(_){} }, 400);
     if (wsReady) {
       try { console.log('[sender(main)] sending sendAnimation via WS'); ws.send(JSON.stringify({ type: 'sendAnimation' })); } catch (_) {}
     } else if (httpFallback && SERVER_URL) {

@@ -209,7 +209,7 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
 // Hook into send/start buttons to clear pulses on click
-try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} }); } catch(_) {}
+try { __sendBtn?.addEventListener('click', () => { window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {} setTimeout(()=>{ try{ startLocalPreviewAnim(); } catch(_){} }, 400); }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
 // Ensure the start tip is visible immediately after page reload if waiting
@@ -230,6 +230,7 @@ try {
 
 // ---- Local preview overlay (video + current drawing), synchronized by sendAnimation ----
 function startLocalPreviewAnim(){
+  if (window.__senderPreviewStarted) return; window.__senderPreviewStarted = true;
   // Build overlay elements
   const wrapEl = document.getElementById('canvas-wrap') || cm.wrap || canvasEl.parentElement;
   if (!wrapEl) return;
@@ -298,6 +299,7 @@ function startLocalPreviewAnim(){
     inner.style.transform = 'rotate(180deg) translateY(120%)';
     setTimeout(()=>{
       try { overlay.remove(); } catch(_) {}
+      window.__senderPreviewStarted = false;
     }, 1500 + 30);
   }, 1000 + 20);
 }
