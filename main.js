@@ -193,8 +193,7 @@
       vid = null;
     }
 
-    // Clear local (no broadcast) and block input during preview
-    try { selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height); composeOthers(); } catch(_) {}
+    // Do NOT clear local canvas here; keep it until global clear after move
     overlay.addEventListener('pointerdown', (e)=> { try { console.log('[sender preview] pointer blocked'); } catch(_) {} e.preventDefault(); }, { once:false });
 
     const rotateDur = 1000; // ms

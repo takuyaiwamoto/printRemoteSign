@@ -386,9 +386,7 @@ function startLocalPreviewAnim(){
   inkImg.width = inkSnap.width; inkImg.height = inkSnap.height;
   const sg = inkImg.getContext('2d'); sg.clearRect(0,0,inkImg.width,inkImg.height); sg.drawImage(inkSnap,0,0);
   inkImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:1;transition:opacity 0ms linear;z-index:2;';
-  // Clear local canvas before move (do not broadcast)
-  try { cm.clear(); } catch(_) {}
-  try { otherEngine?.clearAll?.(); compositeOthers(); } catch(_) {}
+  // Do NOT clear local canvas here; keep it visible until global clear after move
   // Disable local inputs while animating
   overlay.addEventListener('pointerdown', (e)=> { try { console.log('[sender(esm) preview] pointer blocked'); } catch(_) {} e.preventDefault(); }, { once: false });
   // Load candidate video (same as receiver) if B
@@ -403,10 +401,10 @@ function startLocalPreviewAnim(){
       for (const url of candidates) {
         try {
           await new Promise((res,rej)=>{ const onOk=()=>{ cleanup(); res(); }; const onErr=()=>{ cleanup(); rej(new Error('e')); }; function cleanup(){ vid.removeEventListener('loadedmetadata', onOk); vid.removeEventListener('error', onErr);} vid.addEventListener('loadedmetadata', onOk, { once:true }); vid.addEventListener('error', onErr, { once:true }); vid.src=url; vid.load(); });
-          ok = true; break;
+          ok = true; try { console.log('[sender(esm) preview] video source selected', url); } catch(_) {} break;
         } catch(_) { /* try next */ }
       }
-      try { if (ok) await vid.play().catch(()=>{}); } catch(_) {}
+      try { if (ok) { await vid.play().catch(()=>{}); try { console.log('[sender(esm) preview] video play started'); } catch(_) {} } } catch(_) {}
     })();
   }
 
