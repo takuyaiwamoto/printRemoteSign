@@ -149,6 +149,26 @@ canvas {
   .side-tools .actions { grid-column: 1 / -1; grid-auto-flow: column; }
 }
 
+/* デスクトップ（広い画面）のとき: 右パネルをキャンバス寄りに、操作ボタンを中段に固定して届きやすく */
+@media (min-width: 1200px) {
+  .stage { gap: 16px 12px; }
+  .side-tools {
+    grid-template-columns: auto; /* 1列に縦積み */
+    gap: 10px;
+    position: sticky; top: 80px; /* 常に見える位置に固定 */
+    margin-left: -8px; /* キャンバスに少し寄せる */
+  }
+  .side-tools .group { justify-items: start; }
+  .side-tools .actions {
+    grid-auto-flow: row; /* 縦積みの操作群 */
+    gap: 10px;
+    justify-content: start;
+    position: sticky;
+    top: 40vh; /* 画面中段あたりに張り付く（スクロールしても近い位置） */
+  }
+  .action-btn { width: 96px; }
+}
+
 /* --- Button pulse cues (start/send) --- */
 @keyframes pulseBlue {
   0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.65); transform: scale(1); }
