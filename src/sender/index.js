@@ -327,14 +327,13 @@ function startLocalPreviewAnim(){
     if (animType === 'B') {
       // fade-out ink for 2s, then fade-in at earliest of video end or 10s
       try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; } catch(_) {}
-      let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; }; } catch(_) {} }
+      let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; setTimeout(()=> startMove(), moveDelay); }; } catch(_) {} }
       const startedAt = performance.now();
       const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; } catch(_) {} };
       const poll = setInterval(()=>{
         const t = performance.now();
         if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
           clearInterval(poll); fadeIn();
-          setTimeout(()=> startMove(), moveDelay);
         }
       }, 100);
     } else {

@@ -196,7 +196,7 @@
         // B: fade-out snapshot for 2s from rotation start, then later fade-in near video end/10s
         // fade-out 2s
         try { inkImg.style.transition = 'opacity 2000ms linear'; inkImg.style.opacity = '0'; } catch(_) {}
-        let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; }; } catch(_) {} }
+        let videoEnded = false; if (vid) { try { vid.onended = ()=>{ videoEnded = true; setTimeout(()=> startMove(), moveDelay); }; } catch(_) {} }
         // Trigger fade-in at earliest of: video end OR reaching 10s
         const fadeIn = () => { try { inkImg.style.transition = 'opacity 400ms ease'; inkImg.style.opacity = '1'; } catch(_) {} };
         const startedAt = performance.now();
@@ -204,8 +204,6 @@
           const t = performance.now();
           if ((videoEnded) || (vid && vid.currentTime >= 10) || (!vid && (t - startedAt >= 10000))) {
             clearInterval(poll); fadeIn();
-            // Move after video end + moveDelay (match receiver B)
-            setTimeout(()=> startMove(), moveDelay);
           }
         }, 100);
       } else {
