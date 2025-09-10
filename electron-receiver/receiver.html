@@ -25,6 +25,9 @@
         width: min(100%, 1200px);
         height: calc(100vh - 80px);
         display: block; /* 垂直中央配置をやめ、上端を80pxに固定 */
+        /* ルートのスタッキングコンテキストで上位に配置し、
+           z-index:0 の twinkle キャンバスより常に前面に出す */
+        z-index: 500;
         pointer-events: none; /* 背景クリック防止。キャンバスはイベントを受ける */
       }
       .canvas-box {
