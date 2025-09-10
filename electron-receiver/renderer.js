@@ -701,7 +701,7 @@
   function startTwinkleStars({ fadeInMs=2000 }={}){
     if (twRunning) return; twRunning = true;
     const cv = document.createElement('canvas'); twCanvas = cv;
-    cv.style.position='fixed'; cv.style.inset='0'; cv.style.zIndex='100'; cv.style.pointerEvents='none'; document.body.appendChild(cv);
+    cv.style.position='fixed'; cv.style.inset='0'; cv.style.zIndex='0'; cv.style.pointerEvents='none'; document.body.appendChild(cv);
     const g = cv.getContext('2d');
     function fit(){ cv.width=Math.floor((window.innerWidth||800)*DPR); cv.height=Math.floor((window.innerHeight||600)*DPR); cv.style.width='100%'; cv.style.height='100%'; }
     fit(); const onResize=()=>fit(); window.addEventListener('resize', onResize);
