@@ -2,6 +2,7 @@ import http from 'http';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
+import { MAX_FRAME_BYTES } from './lib/constants.js';
 import { registerHttpRoutes } from './httpRoutes.js';
 const RELAY_VERSION = '0.6.2';
 
@@ -51,8 +52,8 @@ wss.on('connection', (ws, req) => {
     if (!msg || typeof msg !== 'object') return;
 
     if (msg.type === 'frame' && typeof msg.data === 'string') {
-      // naive size guard (10MB)
-      if (msg.data.length > 10 * 1024 * 1024) return;
+      // size guard
+      if (msg.data.length > MAX_FRAME_BYTES) return;
       ch.lastFrame = msg.data;
       const txt = JSON.stringify({ type: 'frame', data: msg.data });
       broadcast(ch, txt, (c) => c.role === 'receiver');

@@ -1,5 +1,6 @@
 import express from 'express';
 import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
+import { MAX_FRAME_BYTES } from './lib/constants.js';
 
 // Register HTTP routes on an existing Express app (no behavior change)
 function registerHttpRoutes(app) {
@@ -43,7 +44,7 @@ function registerHttpRoutes(app) {
     const channelName = req.query.channel || 'default';
     const ch = getChannel(channelName);
     const data = req.body?.data;
-    if (typeof data !== 'string' || data.length > 10 * 1024 * 1024) {
+    if (typeof data !== 'string' || data.length > MAX_FRAME_BYTES) {
       return res.status(400).json({ error: 'invalid_or_too_large' });
     }
     ch.lastFrame = data;
