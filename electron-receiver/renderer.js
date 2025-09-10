@@ -705,14 +705,39 @@
     const g = cv.getContext('2d');
     function fit(){ cv.width=Math.floor((window.innerWidth||800)*DPR); cv.height=Math.floor((window.innerHeight||600)*DPR); cv.style.width='100%'; cv.style.height='100%'; }
     fit(); const onResize=()=>fit(); window.addEventListener('resize', onResize);
-    const base = Math.round((cv.width*cv.height)/(180*180)); const count = Math.max(80, Math.min(280, base));
-    twStars = new Array(count).fill(0).map(()=>({ x:Math.random()*cv.width, y:Math.random()*cv.height, r:(Math.random()*2.2+0.8)*DPR, a0:Math.random()*Math.PI*2, w:0.8+Math.random()*1.2, dx:(Math.random()-0.5)*0.10*DPR, dy:(Math.random()-0.5)*0.10*DPR, gold:Math.random()<0.5, rot: Math.random()*Math.PI*2 }));
+    // higher density + larger stars for a more dazzling look
+    const base = Math.round((cv.width*cv.height)/(140*140));
+    const count = Math.max(120, Math.min(480, base));
+    twStars = new Array(count).fill(0).map(()=>({
+      x:Math.random()*cv.width, y:Math.random()*cv.height,
+      r:(Math.random()*3.2+1.2)*DPR,
+      a0:Math.random()*Math.PI*2,
+      w:0.9+Math.random()*1.4,
+      dx:(Math.random()-0.5)*0.12*DPR, dy:(Math.random()-0.5)*0.12*DPR,
+      gold:Math.random()<0.55, rot: Math.random()*Math.PI*2 }));
     twFade = {mode:'in', t0:performance.now(), dur:Math.max(1,fadeInMs), from:0, to:1, alpha:0};
     function alphaNow(){ if (twFade.mode==='none') return twFade.alpha||0; const e=Math.min(1,(performance.now()-twFade.t0)/twFade.dur); const a=twFade.from+(twFade.to-twFade.from)*e; if(e>=1){ twFade.alpha=a; twFade.mode='none'; } return a; }
     function step(){
       g.clearRect(0,0,cv.width,cv.height); g.globalCompositeOperation='lighter';
       const aBase = alphaNow();
-      for (const s of twStars){ s.a0 += s.w*0.03; s.x += s.dx; s.y += s.dy; s.rot += 0.01; if(s.x<-20) s.x=cv.width+20; if(s.x>cv.width+20) s.x=-20; if(s.y<-20) s.y=cv.height+20; if(s.y>cv.height+20) s.y=-20; const tw = 0.35 + 0.75*(0.5+0.5*Math.sin(s.a0)); g.globalAlpha = aBase * tw; g.fillStyle = s.gold ? '#ffd700' : '#c0c0c0'; drawStarPoly(g, s.x, s.y, s.r, s.rot); }
+      for (const s of twStars){
+        s.a0 += s.w*0.03; s.x += s.dx; s.y += s.dy; s.rot += 0.012;
+        if(s.x<-24) s.x=cv.width+24; if(s.x>cv.width+24) s.x=-24; if(s.y<-24) s.y=cv.height+24; if(s.y>cv.height+24) s.y=-24;
+        const tw = 0.45 + 0.95*(0.5+0.5*Math.sin(s.a0)); // brighter sparkle
+        // soft glow halo
+        const glowR = s.r*2.4;
+        const grad = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, glowR);
+        const baseCol = s.gold ? '255,215,0' : '192,192,192';
+        grad.addColorStop(0, `rgba(${baseCol},0.95)`);
+        grad.addColorStop(0.35, `rgba(${baseCol},0.55)`);
+        grad.addColorStop(1, `rgba(${baseCol},0)`);
+        g.globalAlpha = aBase * Math.min(1, tw*0.9);
+        g.fillStyle = grad; g.beginPath(); g.arc(s.x, s.y, glowR, 0, Math.PI*2); g.fill();
+        // core star shape
+        g.globalAlpha = aBase * Math.min(1, tw*1.05);
+        g.fillStyle = s.gold ? '#ffd700' : '#c0c0c0';
+        drawStarPoly(g, s.x, s.y, s.r, s.rot);
+      }
       g.globalAlpha=1; g.globalCompositeOperation='source-over'; twRaf=requestAnimationFrame(step);
     }
     twRaf = requestAnimationFrame(step);
