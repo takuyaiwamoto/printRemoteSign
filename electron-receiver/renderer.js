@@ -738,6 +738,16 @@
         g.fillStyle = s.gold ? '#ffd700' : '#c0c0c0';
         drawStarPoly(g, s.x, s.y, s.r, s.rot);
       }
+      // cut out postcard area so stars never cover the card
+      try {
+        const cardEl = document.getElementById('rotator') || baseCanvas;
+        if (cardEl){
+          const r = cardEl.getBoundingClientRect();
+          g.globalCompositeOperation = 'destination-out';
+          g.fillStyle = 'rgba(0,0,0,1)';
+          g.fillRect(Math.floor(r.left*DPR), Math.floor(r.top*DPR), Math.ceil(r.width*DPR), Math.ceil(r.height*DPR));
+        }
+      } catch(_){ }
       g.globalAlpha=1; g.globalCompositeOperation='source-over'; twRaf=requestAnimationFrame(step);
     }
     twRaf = requestAnimationFrame(step);
