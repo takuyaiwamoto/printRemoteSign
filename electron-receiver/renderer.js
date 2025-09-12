@@ -72,7 +72,10 @@
     // 4) redraw background immediately so it doesn't look blank until next frame
     try { window.ReceiverConfig?.drawBackground?.(base); log('drawBackground after resize'); } catch(e) { log('drawBackground error on resize', e); }
   });
-  fitCanvas(); applyBoxTransform();
+  // Initial fit: defer to next frame to avoid 0-height measurements
+  requestAnimationFrame(() => { fitCanvas(); applyBoxTransform(); try { window.ReceiverConfig?.drawBackground?.(base); } catch(_) {} });
+  // extra safety: run one more pass after a short delay for Electron startup quirks
+  setTimeout(() => { fitCanvas(); applyBoxTransform(); try { window.ReceiverConfig?.drawBackground?.(base); } catch(_) {} }, 60);
 
   // Realtime stroke rendering state (moved to StrokeEngine)
   const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 200))));

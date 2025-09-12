@@ -1,15 +1,18 @@
 (() => {
   function fitCanvas(baseCanvas, inkCanvas, DPR, ratio) {
     if (!baseCanvas || !inkCanvas) return;
-    const parent = baseCanvas.parentElement;
-    let width = parent.offsetWidth;
-    let height = parent.offsetHeight;
-    if (!height) height = Math.round(width / (ratio || (210/297)));
+    const r = (ratio || (210/297));
+    // Prefer the canvasBox as the sizing source to avoid transient 0 heights on absolute parents
+    const box = baseCanvas.closest('#canvasBox') || baseCanvas.parentElement;
+    const rect = box.getBoundingClientRect();
+    let width = Math.max(1, Math.round(rect.width));
+    // When height is zero during early layout, fall back to aspect ratio
+    let height = Math.round(rect.height || (width / r));
     for (const c of [baseCanvas, inkCanvas]) {
       c.style.width = width + 'px';
       c.style.height = height + 'px';
-      c.width = Math.floor(width * DPR);
-      c.height = Math.floor(height * DPR);
+      c.width = Math.max(1, Math.floor(width * DPR));
+      c.height = Math.max(1, Math.floor(height * DPR));
     }
     const bctx = baseCanvas.getContext('2d');
     const ictx = inkCanvas.getContext('2d');
@@ -36,4 +39,3 @@
 
   window.CanvasLayout = { fitCanvas, getElements, applyTransform };
 })();
-
