@@ -89,7 +89,15 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
       }
     } catch(_) {}
     // HTTP fallback
-    try { transport.httpPost?.('/config', { noop: true }); } catch(_) {}
+    try {
+      // Also broadcast via config as a compatibility fallback for older servers
+      const payload = { type: 'config', data: { clearMineAuthor: authorId, cmTs: Date.now() } };
+      if (transport?.wsSend && transport.wsReady) {
+        transport.wsSend(payload);
+      } else {
+        transport?.httpPost?.('/config', payload);
+      }
+    } catch(_) {}
   });
 
   // Send animation trigger to receivers (uses current channel config for delays)

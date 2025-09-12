@@ -62,6 +62,7 @@ const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
 
 const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 let __lastPreCountTs = 0;
+let __lastClearMineTs = 0;
 
 // --- UI elements for cues ---
 const __sendBtn = (()=>{ try { return document.getElementById('btn-send'); } catch(_) { return null; } })();
@@ -274,7 +275,13 @@ transport.onmessage = (msg) => {
         const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
         const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
         if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
-      } } catch(_) {}
+      }
+        // also handle clearMine via config
+        if (j && j.data && Object.prototype.hasOwnProperty.call(j.data,'clearMineAuthor')) {
+          const ts = Number(j.data.cmTs)||0; const aid = String(j.data.clearMineAuthor||'');
+          if (ts && ts > __lastClearMineTs) { __lastClearMineTs = ts; try { console.log('[sender(esm)] SSE config.clearMineAuthor', aid, ts); } catch(_) {} otherEngine?.clearAuthor?.(aid); compositeOthers(); }
+        }
+      } catch(_) {}
     });
     es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
   } catch(_) {}
@@ -514,6 +521,13 @@ function startLocalPreviewAnim(){
                 window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] animKick delayed accept after boot'); } catch(_) {}
                 try { startLocalPreviewAnim(); } catch(_) {}
               }
+    // Fallback: config-based clearMine trigger (compat with older servers)
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'clearMineAuthor')) {
+      const ts = Number(msg.data.cmTs)||0; const aid = String(msg.data.clearMineAuthor||'');
+      if (ts && ts > __lastClearMineTs) { __lastClearMineTs = ts; try { console.log('[sender(esm)] config.clearMineAuthor', aid, ts); } catch(_) {}
+        otherEngine?.clearAuthor?.(aid); compositeOthers();
+      }
+    }
             }, Math.max(100, wait));
           }
         } catch(_) {}

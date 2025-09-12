@@ -424,6 +424,13 @@
                 showStartPrompt();
               }
             }
+        if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'clearMineAuthor')) {
+          try {
+            const aid = String(msg.data.clearMineAuthor||'');
+            const ts = Number(msg.data.cmTs)||0; window.__lastClearMineTs = window.__lastClearMineTs||0;
+            if (ts && ts > window.__lastClearMineTs) { window.__lastClearMineTs = ts; otherEngine?.clearAuthor?.(aid); composeOthers(); if (aid === AUTHOR_ID) { ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); } try { console.log('[sender(main)] WS config.clearMineAuthor', aid, ts); } catch(_) {} }
+          } catch(_) {}
+        }
           }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountStart')) {
           try {
@@ -848,13 +855,29 @@
 
   // ---- Clear only my strokes (broadcast to all) ----
   clearMineBtn?.addEventListener('click', () => {
+    try { console.log('[sender(main)] clearMine clicked'); } catch(_) {}
     try {
-      // locally clear my own layer (selfLayer) and re-compose
+      // 1) locally clear my own layer (selfLayer) and re-compose
       selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
       composeOthers();
-      // notify others
-      if (wsReady) { try { ws.send(JSON.stringify({ type:'clearMine', authorId: AUTHOR_ID })); } catch(_) {} }
-      else if (httpFallback && SERVER_URL) { try { httpPost('/clearMine', { authorId: AUTHOR_ID }); } catch(_) {} }
+      // 2) build payload
+      const payload = { type:'clearMine', authorId: AUTHOR_ID };
+      // 3) try WS send
+      let wsSent = false;
+      try {
+        if (wsReady) { ws.send(JSON.stringify(payload)); wsSent = true; try { console.log('[sender(main)] clearMine sent via WS'); } catch(_) {} }
+      } catch (e) { try { console.warn('[sender(main)] clearMine WS send error', e?.message||e); } catch(_) {} }
+      // 4) always attempt HTTP as well (at-least-once delivery)
+      try {
+        if (SERVER_URL) { httpPost('/clearMine', { authorId: AUTHOR_ID }); try { console.log('[sender(main)] clearMine POST /clearMine'); } catch(_) {} }
+        else { try { console.warn('[sender(main)] SERVER_URL not set; cannot broadcast clearMine'); } catch(_) {} }
+      } catch (e) { try { console.warn('[sender(main)] clearMine HTTP send error', e?.message||e); } catch(_) {} }
+      // 5) Also broadcast via config as compatibility fallback
+      try {
+        const kick = { type: 'config', data: { clearMineAuthor: AUTHOR_ID, cmTs: Date.now() } };
+        if (wsReady) { try { ws.send(JSON.stringify(kick)); console.log('[sender(main)] clearMine config WS'); } catch(_) {} }
+        else if (SERVER_URL) { httpPost('/config', kick); try { console.log('[sender(main)] clearMine config POST'); } catch(_) {} }
+      } catch(_) {}
     } catch(_) {}
   });
 
