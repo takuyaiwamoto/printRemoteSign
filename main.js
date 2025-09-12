@@ -384,6 +384,41 @@
 
   // Default to waiting to avoid showing countdown at boot
   window.__overlayWaiting = true;
+  
+  // ---- Extra WS listener (receiver role) to receive server broadcasts even if not sent to senders ----
+  (function listenAsReceiver(){
+    if (!SERVER_URL) return;
+    const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=receiver`;
+    let wsListen = null; let retry = null;
+    function open(){
+      try { wsListen = new WebSocket(url); } catch(e) { schedule(); return; }
+      wsListen.onopen = () => { try { console.log('[sender(main)] listenWS open', url); } catch(_) {} };
+      wsListen.onerror = () => { schedule(); };
+      wsListen.onclose = () => { schedule(); };
+      wsListen.onmessage = (ev) => {
+        let msg = null; try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null'); } catch(_) {}
+        if (!msg || !msg.type) return;
+        try { console.log('[sender(main)] listenWS message', msg.type); } catch(_) {}
+        if (msg.type === 'clear') {
+          // 背景は維持し、描画のみ消す
+          try { selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height); } catch(_) {}
+          try { otherEngine?.clearAll?.(); } catch(_) {}
+          try { composeOthers(); } catch(_) {}
+          return;
+        }
+        if (msg.type === 'clearMine') {
+          try { otherEngine?.clearAuthor?.(String(msg.authorId||'')); composeOthers(); } catch(_) {}
+          return;
+        }
+        if (msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'clearMineAuthor')) {
+          try { const aid = String(msg.data.clearMineAuthor||''); otherEngine?.clearAuthor?.(aid); composeOthers(); } catch(_) {}
+          return;
+        }
+      };
+    }
+    function schedule(){ if (retry) return; retry = setTimeout(()=>{ retry=null; open(); }, 1000); }
+    open();
+  })();
   function connectWS() {
     if (!SERVER_URL) return;
     const url = `${toWsBase(SERVER_URL)}/ws?channel=${encodeURIComponent(CHANNEL)}&role=sender`;
