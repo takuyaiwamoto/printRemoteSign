@@ -22,6 +22,10 @@ export class CanvasManager {
     this.onStrokePoint = () => {};
     this.onStrokeEnd = () => {};
 
+    // strokes are drawn on a separate transparent layer to protect background
+    this.strokeLayer = document.createElement('canvas');
+    this.strokeCtx = this.strokeLayer.getContext('2d');
+
   this._bindInputs();
   // background
   this.bgMode = 'white';
@@ -35,13 +39,15 @@ export class CanvasManager {
   setBrushColor(color) { this.brushColor = color || this.brushColor; this._applyBrush(); }
 
   _applyBrush() {
-    const ctx = this.ctx;
+    const ctx = this.strokeCtx;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.strokeStyle = this.brushColor;
     const factor = (this.tool === 'eraser') ? this.ERASER_FACTOR : 1.0;
     ctx.lineWidth = this.brushSizeCss * factor * this.DPR;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    // visible canvas smoothing too
+    this.ctx.imageSmoothingEnabled = true; this.ctx.imageSmoothingQuality = 'high';
   }
 
   setTool(tool){ this.tool = (tool === 'eraser') ? 'eraser' : 'pen'; this._applyBrush(); }
@@ -49,10 +55,16 @@ export class CanvasManager {
 
   fitToViewport(preserve = false) {
     if (typeof window !== 'undefined' && window.SenderShared?.layout?.fitToViewport) {
+      // keep previous strokes when preserving size
+      const prevStroke = (preserve && this.strokeLayer?.width && this.strokeLayer?.height)
+        ? (()=>{ const off=document.createElement('canvas'); off.width=this.strokeLayer.width; off.height=this.strokeLayer.height; off.getContext('2d').drawImage(this.strokeLayer,0,0); return off; })()
+        : null;
       window.SenderShared.layout.fitToViewport({ canvas: this.canvas, wrap: this.wrap, DPR: this.DPR, ratio: this.RATIO, preserve });
+      // resize stroke layer to match visible canvas
+      this.strokeLayer.width = this.canvas.width; this.strokeLayer.height = this.canvas.height;
       this._applyBrush();
-      const ctx = this.ctx;
-      if (!preserve) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height); }
+      if (prevStroke) this.strokeCtx.drawImage(prevStroke, 0, 0, prevStroke.width, prevStroke.height, 0, 0, this.strokeLayer.width, this.strokeLayer.height);
+      this._redraw();
       return;
     }
     const pad = 24;
@@ -83,33 +95,24 @@ export class CanvasManager {
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
 
-    let prev = null;
-    if (preserve && this.canvas.width && this.canvas.height) {
-      prev = document.createElement('canvas');
-      prev.width = this.canvas.width; prev.height = this.canvas.height;
-      prev.getContext('2d').drawImage(this.canvas, 0, 0);
-    }
+    const prevStroke = (preserve && this.strokeLayer?.width && this.strokeLayer?.height)
+      ? (()=>{ const off=document.createElement('canvas'); off.width=this.strokeLayer.width; off.height=this.strokeLayer.height; off.getContext('2d').drawImage(this.strokeLayer,0,0); return off; })()
+      : null;
 
     const rect = (this.wrap?.getBoundingClientRect?.() || this.canvas.getBoundingClientRect());
     this.canvas.width = Math.floor(rect.width * this.DPR);
     this.canvas.height = Math.floor(rect.height * this.DPR);
+    // resize stroke layer and restore previous strokes if any
+    this.strokeLayer.width = this.canvas.width; this.strokeLayer.height = this.canvas.height;
     this._applyBrush();
-    const ctx = this.ctx;
-    if (prev) {
-      // Rebuild: background then previous content
-      const off = document.createElement('canvas'); off.width = this.canvas.width; off.height = this.canvas.height;
-      const octx = off.getContext('2d');
-      this._drawBackground(octx);
-      octx.drawImage(prev, 0, 0, prev.width, prev.height, 0, 0, this.canvas.width, this.canvas.height);
-      ctx.drawImage(off, 0, 0);
-    } else { this._drawBackground(ctx); }
+    if (prevStroke) this.strokeCtx.drawImage(prevStroke, 0, 0, prevStroke.width, prevStroke.height, 0, 0, this.strokeLayer.width, this.strokeLayer.height);
+    this._redraw();
   }
 
   clear() {
-    const ctx = this.ctx;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this._drawBackground(ctx);
-    ctx.restore();
+    // clear only strokes; keep background
+    const s = this.strokeCtx; s.save(); s.setTransform(1,0,0,1,0,0); s.clearRect(0,0,this.strokeLayer.width,this.strokeLayer.height); s.restore();
+    this._redraw();
   }
 
   _drawBackground(ctx) {
@@ -119,6 +122,11 @@ export class CanvasManager {
     } else {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
+  }
+
+  _redraw() {
+    const ctx = this.ctx; ctx.save(); ctx.setTransform(1,0,0,1,0,0); this._drawBackground(ctx); ctx.restore();
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(this.strokeLayer, 0, 0); ctx.restore();
   }
 
   async setBackgroundWhite() { this.bgMode = 'white'; this.bgImage = null; this.clear(); }
@@ -166,7 +174,7 @@ export class CanvasManager {
 
     this.points.push({ x, y });
     const n = this.points.length;
-    const ctx = this.ctx; const isEraser = (this.tool === 'eraser');
+    const ctx = this.strokeCtx; const isEraser = (this.tool === 'eraser');
     ctx.save(); ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
     if (n === 2) {
       ctx.beginPath(); ctx.moveTo(this.points[0].x, this.points[0].y); ctx.lineTo(this.points[1].x, this.points[1].y); ctx.stroke();
@@ -180,12 +188,13 @@ export class CanvasManager {
     this.lastX = x; this.lastY = y;
 
     if (this._currentId) this.onStrokePoint?.({ id: this._currentId, nx: x / this.canvas.width, ny: y / this.canvas.height, tool: this.tool });
+    this._redraw();
   }
 
   _end() {
     if (!this.isDrawing) return;
     this.isDrawing = false;
-    const n = this.points.length; const ctx = this.ctx; const isEraser = (this.tool === 'eraser');
+    const n = this.points.length; const ctx = this.strokeCtx; const isEraser = (this.tool === 'eraser');
     ctx.save(); ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
     if (n === 1) { ctx.beginPath(); ctx.fillStyle = this.brushColor; ctx.arc(this.points[0].x, this.points[0].y, (this.brushSizeCss * this.DPR) / 2, 0, Math.PI * 2); ctx.fill(); }
     else if (n >= 3) { const p0 = this.points[n - 3], p1 = this.points[n - 2], p2 = this.points[n - 1]; const mPrev = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }; ctx.beginPath(); ctx.moveTo(mPrev.x, mPrev.y); ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); ctx.stroke(); }
@@ -193,6 +202,7 @@ export class CanvasManager {
     this.points = [];
     if (this._currentId) this.onStrokeEnd?.({ id: this._currentId, tool: this.tool });
     this._currentId = null;
+    this._redraw();
   }
 
   _bindInputs() {
