@@ -79,7 +79,7 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
     // local clear self layer only: since we mix local + others on the same canvas,
     // we just clear the whole canvas here (local content), then ask others to clear our layer.
     canvasManager.clear();
-    if (transport) transport.wsSend ? transport.wsSend({ type:'clearMine', authorId }) : transport.sendClear?.();
+    if (transport) transport.wsSend ? transport.wsSend({ type:'clearMine', authorId }) : transport.sendClearMine?.(authorId);
     // HTTP fallback
     try { transport.httpPost?.('/config', { noop: true }); } catch(_) {}
   });

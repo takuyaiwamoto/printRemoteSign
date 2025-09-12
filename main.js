@@ -20,6 +20,7 @@
   const clearBtn = document.getElementById('clear');
   const saveBtn = document.getElementById('save');
   const clearAllBtn = document.getElementById('btn-clear-all');
+  const clearMineBtn = document.getElementById('btn-clear-mine');
   const eraserBtn = document.getElementById('btn-eraser');
   const sendBtn = document.getElementById('btn-send');
   const overlayStartBtn = document.getElementById('btn-overlay-start');
@@ -835,6 +836,18 @@
       fetch(`${httpBase.replace(/\/$/, '')}/clear?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
     }
   })());
+
+  // ---- Clear only my strokes (broadcast to all) ----
+  clearMineBtn?.addEventListener('click', () => {
+    try {
+      // locally clear my own layer (selfLayer) and re-compose
+      selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height);
+      composeOthers();
+      // notify others
+      if (wsReady) { try { ws.send(JSON.stringify({ type:'clearMine', authorId: AUTHOR_ID })); } catch(_) {} }
+      else if (httpFallback && SERVER_URL) { try { httpPost('/clearMine', { authorId: AUTHOR_ID }); } catch(_) {} }
+    } catch(_) {}
+  });
 
   // ---- Send animation trigger (broadcast to receivers) ----
   sendBtn?.addEventListener('click', () => {
