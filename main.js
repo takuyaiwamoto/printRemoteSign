@@ -359,6 +359,15 @@
       composeOthers();
       if (SDEBUG) slog('sse clear all');
     });
+    es.addEventListener('clearMine', (ev) => {
+      try {
+        const j = JSON.parse(ev.data);
+        const aid = String(j?.authorId||'');
+        otherEngine?.clearAuthor?.(aid);
+        composeOthers();
+        if (SDEBUG) slog('sse clear mine', aid);
+      } catch(_) {}
+    });
     es.addEventListener('config', (ev) => {
       try {
         const m = JSON.parse(ev.data);

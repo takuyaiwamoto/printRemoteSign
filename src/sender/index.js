@@ -253,6 +253,7 @@ transport.onmessage = (msg) => {
     es.onopen = () => { try { console.log('[sender(esm)] SSE open'); } catch(_) {} };
     es.onerror = (e) => { try { console.warn('[sender(esm)] SSE error', e); } catch(_) {} };
     es.addEventListener('clear', ()=>{ try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); });
+    es.addEventListener('clearMine', (ev) => { try { const j=JSON.parse(ev.data); const aid=String(j?.authorId||''); otherEngine?.clearAuthor?.(aid); compositeOthers(); } catch(_) {} });
     es.addEventListener('stroke', (ev) => {
       try {
         const msg = JSON.parse(ev.data);

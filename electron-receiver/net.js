@@ -42,6 +42,7 @@
       es.addEventListener('frame', (ev) => { try { const j = JSON.parse(ev.data); if (j && j.data) onFrame && onFrame(j.data); } catch(_) {} });
       es.addEventListener('stroke', (ev) => { try { const m = JSON.parse(ev.data); onStroke && onStroke(m); } catch(_) {} });
       es.addEventListener('clear', () => { onClear && onClear(); });
+      es.addEventListener('clearMine', (ev) => { try { const m = JSON.parse(ev.data); onClear && onClear(String(m?.authorId||'')); } catch(_) {} });
       es.addEventListener('sendAnimation', () => { try { console.log('[receiver] SSE sendAnimation (event)'); } catch(_) {}; onAction && onAction('sendAnimation'); });
       es.addEventListener('config', (ev) => {
         try {
