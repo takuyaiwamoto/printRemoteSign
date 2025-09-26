@@ -3,7 +3,7 @@ import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
 import { MAX_FRAME_BYTES } from './lib/constants.js';
 
 // Register HTTP routes on an existing Express app (no behavior change)
-function registerHttpRoutes(app) {
+function registerHttpRoutes(app, hooks = {}) {
   // Lightweight CORS + JSON body for HTTP fallback
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -90,6 +90,11 @@ function registerHttpRoutes(app) {
     try { console.log('[server] /anim trigger channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
     broadcast(ch, txt, () => true);
     broadcastSSE(ch, msg);
+    try {
+      if (hooks.onSendAnimation) hooks.onSendAnimation();
+    } catch (err) {
+      console.warn('[server] onSendAnimation hook failed', err?.message || err);
+    }
     res.json({ ok: true });
   });
 
@@ -119,6 +124,13 @@ function registerHttpRoutes(app) {
     const payload = JSON.stringify({ type: 'config', data });
     broadcast(ch, payload, () => true);
     broadcastSSE(ch, { type: 'config', data });
+    if (Object.prototype.hasOwnProperty.call(data, 'animKick')) {
+      try {
+        if (hooks.onSendAnimation) hooks.onSendAnimation();
+      } catch (err) {
+        console.warn('[server] onSendAnimation hook failed', err?.message || err);
+      }
+    }
     res.json({ ok: true });
   });
 

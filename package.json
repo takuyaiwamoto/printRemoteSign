@@ -3,12 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "prestart": "npm --prefix electron-receiver install",
-    "start": "npm --prefix electron-receiver start",
+    "prestart": "npm --prefix server install && npm --prefix electron-receiver install",
+    "start": "node scripts/dev-start.js",
     "receiver": "npm --prefix electron-receiver start",
+    "bridge": "npm --prefix server run led-bridge",
     "server": "npm --prefix server start",
     "install:all": "npm --prefix server install && npm --prefix electron-receiver install",
     "format": "npx prettier . --write",
-    "format:check": "npx prettier . --check"
+    "format:check": "npx prettier . --check",
+    "new:program": "node scripts/new-program.js"
   }
 }

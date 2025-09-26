@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "led-bridge": "node led-bridge.mjs"
   },
   "dependencies": {
     "express": "4.19.2",
+    "serialport": "^12.0.0",
     "ws": "8.18.0"
   }
 }
-

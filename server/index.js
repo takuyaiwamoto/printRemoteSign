@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
 import { MAX_FRAME_BYTES } from './lib/constants.js';
 import { registerHttpRoutes } from './httpRoutes.js';
+import { initArduinoLedController, notifySendTriggered } from './lib/arduinoLedController.js';
 const RELAY_VERSION = '0.6.2';
 
 const app = express();
@@ -16,8 +17,15 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '20mb' }));
+
+initArduinoLedController();
+
 // Register HTTP routes (same behavior as before)
-registerHttpRoutes(app);
+registerHttpRoutes(app, {
+  onSendAnimation: () => {
+    try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered failed', err?.message || err); }
+  },
+});
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -66,6 +74,7 @@ wss.on('connection', (ws, req) => {
       const relay = JSON.stringify({ type: 'sendAnimation' });
       broadcast(ch, relay, () => true);
       broadcastSSE(ch, { type: 'sendAnimation' });
+      try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered failed', err?.message || err); }
       return;
     }
 
@@ -113,6 +122,9 @@ wss.on('connection', (ws, req) => {
       const payload = JSON.stringify({ type: 'config', data: msg.data });
       broadcast(ch, payload, () => true);
       broadcastSSE(ch, { type: 'config', data: msg.data });
+      if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
+        try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered failed', err?.message || err); }
+      }
       return;
     }
   });
