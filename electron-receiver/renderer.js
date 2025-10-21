@@ -36,6 +36,7 @@
   let lastDrawnVersion = -1;
   let rafRunning = false;
   let ignoreFrames = false; // ストロークが来始めたらPNGフレームを無視（太さ差異/ぼけ回避）
+  let lastSendAnimationAt = 0;
   // Optional ink fade alpha (used by animation B)
   let inkFadeAlpha = 1;
   const { canvasBox, scaler, rotator } = (window.CanvasLayout?.getElements?.() || {
@@ -56,7 +57,18 @@
     onScaleCb: (v) => { scalePct = v; applyBoxTransform(); log('scaleReceiver applied', { v, factor: v/100 }); },
     onRotateCb: (deg) => { rotationDeg = deg === 180 ? 180 : 0; applyBoxTransform(); log('rotateReceiver applied', { rotationDeg }); },
     // When animKick config arrives, also schedule print as a fallback if sendAnimation WS isn't received
-    onKickCb: () => { try { console.log('[receiver] animKick received -> start anim + schedule print'); } catch(_) {} tryStartAnimation(); trySchedulePrint(); },
+    onKickCb: () => {
+      try { console.log('[receiver] animKick received'); } catch(_) {}
+      tryStartAnimation();
+      const nowWall = Date.now();
+      const deltaMs = nowWall - lastSendAnimationAt;
+      if (!lastSendAnimationAt || deltaMs > 2000) {
+        try { console.log('[receiver] animKick scheduling print (fallback)'); } catch(_) {}
+        trySchedulePrint({ source: 'animKick' });
+      } else {
+        try { console.log('[receiver] animKick skipping print (sendAnimation handled recently)', { deltaMs }); } catch(_) {}
+      }
+    },
     logCb: (...a) => log(...a)
   });
 
@@ -339,8 +351,9 @@
     onAction: (type) => {
       try { console.log('[receiver] onAction', type); } catch(_) {}
       if (type === 'sendAnimation') {
+        lastSendAnimationAt = Date.now();
         tryStartAnimation();
-        trySchedulePrint();
+        trySchedulePrint({ source: 'sendAnimation' });
       }
       if (type === 'printNow') {
         trySchedulePrint();
