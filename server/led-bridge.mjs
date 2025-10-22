@@ -3,6 +3,7 @@ import {
   initArduinoLedController,
   notifySendTriggered,
   notifyIdle,
+  notifyRelayBurst,
   shutdownLed,
 } from './lib/arduinoLedController.js';
 
@@ -50,9 +51,25 @@ function connect() {
         try { notifySendTriggered(); } catch (err) { console.warn('[led-bridge] notifySendTriggered failed', err?.message || err); }
         break;
       case 'config':
-        if (msg.data && Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
-          console.log('[led-bridge] config.animKick received');
-          try { notifySendTriggered(); } catch (err) { console.warn('[led-bridge] notifySendTriggered failed', err?.message || err); }
+        if (msg.data && typeof msg.data === 'object') {
+          if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
+            console.log('[led-bridge] config.animKick received');
+            try { notifySendTriggered(); } catch (err) { console.warn('[led-bridge] notifySendTriggered failed', err?.message || err); }
+          }
+          if (Object.prototype.hasOwnProperty.call(msg.data, 'relayKick')) {
+            console.log('[led-bridge] config.relayKick received');
+            try { notifyRelayBurst(); } catch (err) { console.warn('[led-bridge] notifyRelayBurst failed', err?.message || err); }
+          }
+          if (Object.prototype.hasOwnProperty.call(msg.data, 'ledTest')) {
+            const v = String(msg.data.ledTest || '').toLowerCase();
+            if (v === 'blue') {
+              console.log('[led-bridge] config.ledTest=blue received');
+              try { notifyIdle(); } catch (err) { console.warn('[led-bridge] notifyIdle failed', err?.message || err); }
+            } else if (v === 'rainbow') {
+              console.log('[led-bridge] config.ledTest=rainbow received');
+              try { notifySendTriggered(); } catch (err) { console.warn('[led-bridge] notifySendTriggered failed', err?.message || err); }
+            }
+          }
         }
         break;
       case 'clear':

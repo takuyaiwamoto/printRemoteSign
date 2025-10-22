@@ -131,6 +131,13 @@ function registerHttpRoutes(app, hooks = {}) {
         console.warn('[server] onSendAnimation hook failed', err?.message || err);
       }
     }
+    if (Object.prototype.hasOwnProperty.call(data, 'relayKick')) {
+      try {
+        if (hooks.onRelayKick) hooks.onRelayKick();
+      } catch (err) {
+        console.warn('[server] onRelayKick hook failed', err?.message || err);
+      }
+    }
     res.json({ ok: true });
   });
 
@@ -145,6 +152,23 @@ function registerHttpRoutes(app, hooks = {}) {
     broadcast(ch, txt, () => true);
     broadcastSSE(ch, msg);
     res.json({ ok: true });
+  });
+
+  app.post('/hardware-test', (req, res) => {
+    const action = typeof req.body?.action === 'string' ? req.body.action : '';
+    if (!action) return res.status(400).json({ error: 'missing_action' });
+    try {
+      if (hooks?.onHardwareTest) {
+        const accepted = hooks.onHardwareTest(action);
+        if (accepted !== false) {
+          return res.json({ ok: true });
+        }
+      }
+    } catch (err) {
+      console.warn('[http] hardware-test hook failed', err?.message || err);
+      return res.status(500).json({ error: 'internal_error' });
+    }
+    return res.status(400).json({ error: 'unsupported_action' });
   });
 }
 

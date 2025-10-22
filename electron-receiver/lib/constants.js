@@ -8,6 +8,7 @@
     overlayRemainSec: 'overlayRemainSec',
     overlayDescending: 'overlayDescending',
     overlayWaiting: 'overlayWaiting',
+    relayKick: 'relayKick',
   };
   const PERSISTENT_KEYS = [
     'animType', 'animAudioVol',
@@ -20,7 +21,10 @@
     EVENTS.overlayRemainSec,
     EVENTS.overlayDescending,
     EVENTS.overlayWaiting,
-    'overlayKick'
+    EVENTS.relayKick,
+    'overlayKick',
+    'ledTest',
+    'ledTestTs'
   ];
   return { EVENTS, PERSISTENT_KEYS, EPHEMERAL_KEYS };
 });

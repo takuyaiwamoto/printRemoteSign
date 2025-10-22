@@ -17,6 +17,12 @@
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
       .muted { color: #6b7280; }
       .notice { font-size: 12px; color: #6b7280; }
+      .btn-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+      .btn { appearance: none; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform .05s ease, box-shadow .1s ease; color: #fff; background: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, .2); }
+      .btn:active { transform: translateY(1px); box-shadow: 0 2px 6px rgba(37, 99, 235, .25); }
+      .btn.is-secondary { background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, .2); }
+      .btn.is-danger { background: #f97316; box-shadow: 0 4px 12px rgba(249, 115, 22, .2); }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
     </style>
   </head>
   <body>
@@ -79,6 +85,15 @@
               印刷は180度で出力（はがき上下反転）
             </label>
           </div>
+        </div>
+        <div class="panel" id="hardwarePanel">
+          <div class="head">ハードウェア接続テスト</div>
+          <div class="btn-grid">
+            <button type="button" id="btn-led-blue" class="btn">LEDを青で点灯</button>
+            <button type="button" id="btn-led-rainbow" class="btn is-secondary">LEDをレインボー点灯</button>
+            <button type="button" id="btn-relay-test" class="btn is-danger">リレーをテスト</button>
+          </div>
+          <div class="notice">※テストボタンはArduinoリレーシールドとの接続を確認するための簡易動作です。</div>
         </div>
       </div>
       <div><strong>背景設定</strong> <span class="muted">（クリックで送信／即時反映）</span></div>

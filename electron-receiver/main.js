@@ -116,7 +116,7 @@ app.on('window-all-closed', () => {
 // Printing pipeline: receive PNG dataURL and print silently to the target device
 ipcMain.on('print-ink', async (ev, payload) => {
   try {
-    const targetName = 'Brother_MFC_J6983CDW_2';
+    const targetName = 'Brother_MFC_J6983CDW';
     console.log('[print] received job payload bytes=', (payload?.dataURL||'').length);
     // Try CUPS `lp` path first to force plain paper (MediaType=stationery). Fallback to webContents.print.
     const tryLpFirst = process.platform === 'darwin' || process.platform === 'linux';
@@ -135,8 +135,8 @@ ipcMain.on('print-ink', async (ev, payload) => {
             '-o', 'MediaType=stationery',
             '-o', 'InputSlot=tray-1',
             '-o', 'print-quality=Normal',
-            // Force page size to L (3.5x5 inch) to match tray setting
-            '-o', 'PageSize=3.5x5',
+            // Force borderless Hagaki postcard (100x148 mm)
+            '-o', 'PageSize=Postcard.Fullbleed',
             tmp
           ];
           console.log('[print][lp] exec lp', args.join(' '));
@@ -176,14 +176,14 @@ ipcMain.on('print-ink', async (ev, payload) => {
         const deviceName = found?.name || alt?.name;
         if (!deviceName) console.warn('[print] target printer not found; using system default');
         else console.log('[print] using printer:', deviceName);
-        // Fallback renderer print: also set L size (3.5x5 inch)
+        // Fallback renderer print: also set Hagaki size (borderless)
         win.webContents.print({
           silent: true,
           deviceName,
           printBackground: true,
           margins: { marginType: 'none' },
-          // L size = 3.5 x 5.0 inch ≒ 88.9 x 127.0 mm
-          pageSize: { width: 88900, height: 127000 },
+          // Hagaki postcard = 100 x 148 mm
+          pageSize: { width: 100000, height: 148000 },
           landscape: false,
         }, (success, errorType) => {
           try { win.close(); } catch(_) {}

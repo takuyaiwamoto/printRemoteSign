@@ -3,7 +3,7 @@
   else if (typeof module === 'object' && module.exports) { module.exports = factory(require('./constants.js')); }
   else { (root.ReceiverShared = root.ReceiverShared || {}).bus = factory((root.ReceiverShared||{}).constants); }
 })(typeof self !== 'undefined' ? self : this, function(constants){
-  const CONST = constants && constants.EVENTS ? constants : { EVENTS:{ preCountStart:'preCountStart', overlayRemainSec:'overlayRemainSec', overlayDescending:'overlayDescending', overlayWaiting:'overlayWaiting' } };
+  const CONST = constants && constants.EVENTS ? constants : { EVENTS:{ preCountStart:'preCountStart', overlayRemainSec:'overlayRemainSec', overlayDescending:'overlayDescending', overlayWaiting:'overlayWaiting', relayKick:'relayKick' } };
 
   function toHttpBase(u){ return String(u||'').replace(/^wss?:\/\//i, (m)=>m.toLowerCase()==='wss://'?'https://':'http://').replace(/\/$/,''); }
 
@@ -18,9 +18,9 @@
       publishRemain: (sec)=> publishConfig({ [CONST.EVENTS.overlayRemainSec]: Math.max(0, Math.floor(sec||0)) }),
       publishWaiting: (on)=> publishConfig({ [CONST.EVENTS.overlayWaiting]: !!on }),
       publishDescending: (on)=> publishConfig({ [CONST.EVENTS.overlayDescending]: !!on }),
+      publishRelayKick: ()=> publishConfig({ [CONST.EVENTS.relayKick]: Date.now() }),
     };
   }
 
   return { create, toHttpBase };
 });
-

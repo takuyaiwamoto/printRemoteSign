@@ -211,4 +211,60 @@
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
   }
   volEl?.addEventListener('input', ()=>{ volVal.textContent = volEl.value; clearTimeout(vtimer); vtimer = setTimeout(()=> sendAudioVol(volEl.value), 120); });
+
+  // Hardware test buttons (LED / Relay)
+  function sendHardwareConfig(action) {
+    const data = {};
+    const ts = Date.now();
+    switch (action) {
+      case 'led-blue':
+        data.ledTest = 'blue';
+        data.ledTestTs = ts;
+        break;
+      case 'led-rainbow':
+        data.ledTest = 'rainbow';
+        data.ledTestTs = ts;
+        break;
+      case 'relay-burst':
+        data.relayKick = ts;
+        break;
+      default:
+        return;
+    }
+    const payload = { type: 'config', data };
+    if (ws && ws.readyState === 1) {
+      try { ws.send(JSON.stringify(payload)); } catch(_) {}
+    }
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data })
+    }).catch(()=>{});
+  }
+
+  function triggerHardwareTest(action, btn){
+    if (!SERVER_URL) return;
+    const url = `${httpBase(SERVER_URL)}/hardware-test?channel=${encodeURIComponent(CHANNEL)}`;
+    btn.disabled = true;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    }).then((res) => {
+      if (!res || !res.ok) {
+        sendHardwareConfig(action);
+      }
+    }).catch(() => {
+      sendHardwareConfig(action);
+    }).finally(() => {
+      setTimeout(() => { btn.disabled = false; }, 1500);
+    });
+  }
+
+  const ledBlueBtn = document.getElementById('btn-led-blue');
+  const ledRainbowBtn = document.getElementById('btn-led-rainbow');
+  const relayBtn = document.getElementById('btn-relay-test');
+  ledBlueBtn?.addEventListener('click', () => triggerHardwareTest('led-blue', ledBlueBtn));
+  ledRainbowBtn?.addEventListener('click', () => triggerHardwareTest('led-rainbow', ledRainbowBtn));
+  relayBtn?.addEventListener('click', () => triggerHardwareTest('relay-burst', relayBtn));
 })();

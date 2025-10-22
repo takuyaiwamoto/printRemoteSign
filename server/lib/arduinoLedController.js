@@ -163,6 +163,10 @@ class ArduinoLedController {
     }
     this.writeCommand('O');
   }
+
+  triggerRelayBurst() {
+    this.writeCommand('M');
+  }
 }
 
 let controller = null;
@@ -192,4 +196,8 @@ export function notifyIdle() {
 
 export function shutdownLed() {
   controller?.setOff();
+}
+
+export function notifyRelayBurst() {
+  controller?.triggerRelayBurst();
 }

@@ -531,6 +531,9 @@
           box.style.transform = `translateY(${y}px)`;
           if (e < 1) requestAnimationFrame(moveTick); else afterMove();
         }
+        try {
+          (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL })?.publishRelayKick?.();
+        } catch(_) {}
         requestAnimationFrame(moveTick);
       }, rotateDur + moveDelay);
     }, rotateDelay);
@@ -676,6 +679,9 @@
           const box = canvasBox; if (!box) return finish();
           const start = performance.now(); const from=0, to=(window.innerHeight||2000);
           const tick=(t)=>{ const e=Math.min(1,(t-start)/moveDur); const y=from+(to-from)*e; box.style.transform=`translateY(${y}px)`; if(e<1) requestAnimationFrame(tick); else afterMove(); };
+          try {
+            (window.ReceiverShared?.bus || {}).create?.({ server: SERVER, channel: CHANNEL })?.publishRelayKick?.();
+          } catch(_) {}
           requestAnimationFrame(tick);
         }
       })();

@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws';
 import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
 import { MAX_FRAME_BYTES } from './lib/constants.js';
 import { registerHttpRoutes } from './httpRoutes.js';
-import { initArduinoLedController, notifySendTriggered } from './lib/arduinoLedController.js';
+import { initArduinoLedController, notifySendTriggered, notifyIdle, notifyRelayBurst } from './lib/arduinoLedController.js';
 const RELAY_VERSION = '0.6.2';
 
 const app = express();
@@ -25,6 +25,29 @@ registerHttpRoutes(app, {
   onSendAnimation: () => {
     try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered failed', err?.message || err); }
   },
+  onRelayKick: () => {
+    try { notifyRelayBurst(); } catch (err) { console.warn('[server] notifyRelayBurst failed', err?.message || err); }
+  },
+  onHardwareTest: (action) => {
+    try {
+      switch (action) {
+        case 'led-blue':
+          notifyIdle();
+          return true;
+        case 'led-rainbow':
+          notifySendTriggered();
+          return true;
+        case 'relay-burst':
+          notifyRelayBurst();
+          return true;
+        default:
+          return false;
+      }
+    } catch (err) {
+      console.warn('[server] hardware-test handler failed', err?.message || err);
+      return false;
+    }
+  }
 });
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -114,7 +137,7 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'config' && msg.data && typeof msg.data === 'object') {
       // Ephemeral keys should NOT persist in channel config to avoid replay on new clients
-      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayWaiting','overlayKick']);
+      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayWaiting','overlayKick','relayKick','ledTest','ledTestTs']);
       const persist = { ...(ch.config || {}) };
       // Merge only non-ephemeral keys
       for (const [k, v] of Object.entries(msg.data)) { if (!ephemeralKeys.has(k)) persist[k] = v; }
@@ -124,6 +147,17 @@ wss.on('connection', (ws, req) => {
       broadcastSSE(ch, { type: 'config', data: msg.data });
       if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
         try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered failed', err?.message || err); }
+      }
+      if (Object.prototype.hasOwnProperty.call(msg.data, 'relayKick')) {
+        try { notifyRelayBurst(); } catch (err) { console.warn('[server] notifyRelayBurst failed', err?.message || err); }
+      }
+      if (Object.prototype.hasOwnProperty.call(msg.data, 'ledTest')) {
+        const v = String(msg.data.ledTest || '').toLowerCase();
+        if (v === 'blue') {
+          try { notifyIdle(); } catch (err) { console.warn('[server] notifyIdle (ledTest) failed', err?.message || err); }
+        } else if (v === 'rainbow') {
+          try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered (ledTest) failed', err?.message || err); }
+        }
       }
       return;
     }
