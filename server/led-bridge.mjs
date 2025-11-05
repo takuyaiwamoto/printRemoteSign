@@ -65,6 +65,9 @@ function connect() {
             if (v === 'blue') {
               console.log('[led-bridge] config.ledTest=blue received');
               try { notifyIdle(); } catch (err) { console.warn('[led-bridge] notifyIdle failed', err?.message || err); }
+            } else if (v === 'off') {
+              console.log('[led-bridge] config.ledTest=off received');
+              try { shutdownLed(); } catch (err) { console.warn('[led-bridge] shutdownLed failed', err?.message || err); }
             } else if (v === 'rainbow') {
               console.log('[led-bridge] config.ledTest=rainbow received');
               try { notifySendTriggered(); } catch (err) { console.warn('[led-bridge] notifySendTriggered failed', err?.message || err); }

@@ -221,6 +221,10 @@
         data.ledTest = 'blue';
         data.ledTestTs = ts;
         break;
+      case 'led-off':
+        data.ledTest = 'off';
+        data.ledTestTs = ts;
+        break;
       case 'led-rainbow':
         data.ledTest = 'rainbow';
         data.ledTestTs = ts;
@@ -262,9 +266,11 @@
   }
 
   const ledBlueBtn = document.getElementById('btn-led-blue');
+  const ledOffBtn = document.getElementById('btn-led-off');
   const ledRainbowBtn = document.getElementById('btn-led-rainbow');
   const relayBtn = document.getElementById('btn-relay-test');
   ledBlueBtn?.addEventListener('click', () => triggerHardwareTest('led-blue', ledBlueBtn));
+  ledOffBtn?.addEventListener('click', () => triggerHardwareTest('led-off', ledOffBtn));
   ledRainbowBtn?.addEventListener('click', () => triggerHardwareTest('led-rainbow', ledRainbowBtn));
   relayBtn?.addEventListener('click', () => triggerHardwareTest('relay-burst', relayBtn));
 })();

@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws';
 import { getChannel, broadcast, broadcastSSE } from './lib/channels.js';
 import { MAX_FRAME_BYTES } from './lib/constants.js';
 import { registerHttpRoutes } from './httpRoutes.js';
-import { initArduinoLedController, notifySendTriggered, notifyIdle, notifyRelayBurst } from './lib/arduinoLedController.js';
+import { initArduinoLedController, notifySendTriggered, notifyIdle, notifyRelayBurst, shutdownLed } from './lib/arduinoLedController.js';
 const RELAY_VERSION = '0.6.2';
 
 const app = express();
@@ -36,6 +36,9 @@ registerHttpRoutes(app, {
           return true;
         case 'led-rainbow':
           notifySendTriggered();
+          return true;
+        case 'led-off':
+          shutdownLed();
           return true;
         case 'relay-burst':
           notifyRelayBurst();
@@ -155,6 +158,8 @@ wss.on('connection', (ws, req) => {
         const v = String(msg.data.ledTest || '').toLowerCase();
         if (v === 'blue') {
           try { notifyIdle(); } catch (err) { console.warn('[server] notifyIdle (ledTest) failed', err?.message || err); }
+        } else if (v === 'off') {
+          try { shutdownLed(); } catch (err) { console.warn('[server] shutdownLed (ledTest) failed', err?.message || err); }
         } else if (v === 'rainbow') {
           try { notifySendTriggered(); } catch (err) { console.warn('[server] notifySendTriggered (ledTest) failed', err?.message || err); }
         }
