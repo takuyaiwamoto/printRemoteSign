@@ -359,6 +359,7 @@
         trySchedulePrint();
       }
       if (type === 'overlayStart') { try { Flow?.start?.(); } catch(_) {} }
+      if (type === 'overlayStop') { finishOverlaySession({ reason: 'remote', triggerDrop: true }); }
     },
     setStatus: (t) => setStatus(t),
     setInfo: (t) => setInfo(t),
@@ -375,6 +376,7 @@
   let overlayCountdownTimer = null;
   let overlayCountdownT0 = 0;
   let overlayRunning = false; // kept for compatibility
+  let overlayDescendingTimer = null;
   function stopOverlayCountdown(){ if (overlayCountdownTimer) { clearInterval(overlayCountdownTimer); overlayCountdownTimer = null; } }
   function publishOverlayRemain(sec){
     try {
@@ -392,6 +394,36 @@
     } catch(_) {}
   }
 
+  function triggerOverlayDescendingPulse() {
+    publishOverlayDescending(true);
+    try { window.OverlayBridge?.triggerStop?.(); } catch(_) {}
+    if (overlayDescendingTimer) { clearTimeout(overlayDescendingTimer); overlayDescendingTimer = null; }
+    overlayDescendingTimer = setTimeout(() => {
+      overlayDescendingTimer = null;
+      publishOverlayDescending(false);
+    }, 2500);
+  }
+
+  function finishOverlaySession({ reason = 'auto', triggerDrop = true } = {}) {
+    try { console.log('[receiver] finishOverlaySession', { reason, triggerDrop }); } catch(_) {}
+    stopOverlayCountdown();
+    overlayRunning = false;
+    try { Flow?.reset?.(); } catch(_) {}
+    publishOverlayRemain(0);
+    if (triggerDrop) {
+      triggerOverlayDescendingPulse();
+    } else {
+      if (overlayDescendingTimer) { clearTimeout(overlayDescendingTimer); overlayDescendingTimer = null; }
+      publishOverlayDescending(false);
+    }
+    try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishWaiting?.(true); } catch(_) {}
+    if (countdownAudio) {
+      try { countdownAudio.pause(); countdownAudio.currentTime = 0; } catch(_) {}
+      countdownAudioPlaying = false;
+      countdownAudio = null;
+    }
+  }
+
   // ---- Simple flow state machine wrapper ----
   const Flow = (function(){
     try {
@@ -404,7 +436,12 @@
         playAudioCb: ()=>{ playCountdownAudio(); try { window.OverlayPreCount?.notify?.(); } catch(_) {} }
       });
       // Waiting off/on around flow
-      const origStart = SM.start; SM.start = function(){ Bus?.publishWaiting?.(false); return origStart(); };
+      const origStart = SM.start; SM.start = function(){
+        if (overlayDescendingTimer) { clearTimeout(overlayDescendingTimer); overlayDescendingTimer = null; }
+        publishOverlayDescending(false);
+        Bus?.publishWaiting?.(false);
+        return origStart();
+      };
       return SM;
     } catch(_) { return null; }
   })();
@@ -422,13 +459,10 @@
       const left = Math.max(0, remain - elapsed);
       publishOverlayRemain(left);
       if (left <= 0) {
-        // Immediately mark session finished and allow next start
-        try { Flow?.reset?.(); } catch(_) {}
-        try { (window.ReceiverShared?.bus || {}).create?.({server:SERVER, channel:CHANNEL})?.publishWaiting?.(true); } catch(_) {}
-        // start descending window for ~2.5s
-        publishOverlayDescending(true);
-        setTimeout(()=> publishOverlayDescending(false), 2500);
-        stopOverlayCountdown(); overlayRunning = false;
+        try { console.log('[receiver] countdown complete (awaiting manual stop)'); } catch(_) {}
+        stopOverlayCountdown();
+        overlayRunning = false;
+        publishOverlayRemain(0);
       }
     }, 1000);
   }

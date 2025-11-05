@@ -63,6 +63,7 @@ const AUTHOR_ID = Math.random().toString(36).slice(2, 10);
 const __BOOT_AT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 let __lastPreCountTs = 0;
 let __lastClearMineTs = 0;
+let __lastOverlayStopTs = 0;
 
 // --- UI elements for cues ---
 const __sendBtn = (()=>{ try { return document.getElementById('btn-send'); } catch(_) { return null; } })();
@@ -106,10 +107,82 @@ function showStartArrow(on){
 function showStartPrompt(){
   try {
     let tip = document.getElementById('senderPressStart');
-    if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id='senderPressStart';
+      tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
+      const t=document.createElement('div');
+      t.id='senderPressStartLabel';
+      t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;';
+      t.textContent='開始を押してください';
+      tip.appendChild(t);
+      document.body.appendChild(tip);
+    }
+    const label = document.getElementById('senderPressStartLabel') || tip.firstChild;
+    label.textContent = window.__overlayWaiting ? '開始を押してください' : '終了を押してください';
     tip.style.display = 'grid';
     pulseStart(true);
   } catch(_) {}
+}
+
+function hideStartPrompt(){
+  try { const tip = document.getElementById('senderPressStart'); if (tip) tip.style.display = 'none'; } catch(_) {}
+}
+
+function updateStartButtonLabel(){
+  try {
+    if (!__startBtn) return;
+    const waiting = !!window.__overlayWaiting;
+    __startBtn.textContent = waiting ? '開始' : '終了';
+    __startBtn.setAttribute('title', waiting ? '演出を開始' : '演出を終了');
+    __startBtn.setAttribute('aria-pressed', waiting ? 'false' : 'true');
+    __startBtn.classList.toggle('is-active', !waiting);
+  } catch(_) {}
+}
+
+function applyOverlayWaitingState(waiting){
+  const isWaiting = !!waiting;
+  window.__overlayWaiting = isWaiting;
+  updateStartButtonLabel();
+  pulseStart(isWaiting);
+  showStartArrow(isWaiting);
+  if (isWaiting) {
+    window.__sentThisWindow = false;
+    pulseSend(false);
+    try { showSendArrow(false); } catch(_) {}
+    showStartPrompt();
+  } else {
+    hideStartPrompt();
+  }
+  try {
+    const cd = document.getElementById('senderCountdown');
+    if (cd && isWaiting) cd.style.display = 'none';
+  } catch(_) {}
+}
+
+function handleOverlayStopEvent() {
+  applyOverlayWaitingState(true);
+  try {
+    if (typeof window.__senderPreviewStop === 'function') {
+      window.__senderPreviewStop();
+    }
+  } catch(_) {}
+}
+
+updateStartButtonLabel();
+applyOverlayWaitingState(window.__overlayWaiting);
+
+function handleOverlayToggle() {
+  const waiting = !!window.__overlayWaiting;
+  if (waiting) {
+    try { console.log('[sender(esm)] manual overlay start request'); } catch(_) {}
+    try { transport?.sendOverlayStart?.(); } catch(_) {}
+    applyOverlayWaitingState(false);
+  } else {
+    try { console.log('[sender(esm)] manual overlay stop request'); } catch(_) {}
+    try { transport?.sendOverlayStop?.(); } catch(_) {}
+    handleOverlayStopEvent();
+  }
 }
 
 // ---- Send button arrow (red) ----
@@ -184,18 +257,19 @@ transport.onmessage = (msg) => {
     }
     // waiting tip + flag
     if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayWaiting')) {
-      window.__overlayWaiting = !!msg.data.overlayWaiting;
-      // Start button pulse while waiting
-      pulseStart(window.__overlayWaiting === true);
-      showStartArrow(window.__overlayWaiting === true);
-      if (window.__overlayWaiting) { window.__sentThisWindow = false; pulseSend(false); try { const el = document.getElementById('sendArrowCue'); if (el) el.style.display='none'; } catch(_) {} }
-      let tip = document.getElementById('senderPressStart');
-      if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
-      tip.style.display = window.__overlayWaiting ? 'grid' : 'none';
-      const cd = document.getElementById('senderCountdown'); if (cd && window.__overlayWaiting) cd.style.display='none';
+      applyOverlayWaitingState(msg.data.overlayWaiting);
     }
     if (typeof msg.data.overlayWarnSec !== 'undefined') { const v = Number(msg.data.overlayWarnSec); if (isFinite(v)) window.__overlayWarnSec = Math.max(0, Math.min(60, Math.round(v))); }
     if (typeof msg.data.preCountSec !== 'undefined') { const v = Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v))); }
+    if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayStopKick')) {
+      const ts = Number(msg.data.overlayStopKick) || 0;
+      const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (ts && ts > __lastOverlayStopTs && nowT - __BOOT_AT > 500) {
+        __lastOverlayStopTs = ts;
+        try { console.log('[sender(esm)] config.overlayStopKick', ts); } catch(_) {}
+        handleOverlayStopEvent();
+      }
+    }
     // remain countdown (show only when not waiting)
     if (typeof msg.data.overlayRemainSec !== 'undefined') {
       const left = Math.max(0, Math.floor(Number(msg.data.overlayRemainSec)||0));
@@ -229,6 +303,11 @@ transport.onmessage = (msg) => {
     try { pulseSend(false); showSendArrow(false); } catch(_) {}
     try { window.__sentThisWindow = true; } catch(_) {}
     try { startLocalPreviewAnim(); } catch(_) {}
+  }
+  if (msg.type === 'overlayStop') {
+    try { console.log('[sender(esm)] WS overlayStop received'); } catch(_) {}
+    handleOverlayStopEvent();
+    return;
   }
   // strokes from others
   if (msg.type === 'stroke') {
@@ -281,9 +360,19 @@ transport.onmessage = (msg) => {
           const ts = Number(j.data.cmTs)||0; const aid = String(j.data.clearMineAuthor||'');
           if (ts && ts > __lastClearMineTs) { __lastClearMineTs = ts; try { console.log('[sender(esm)] SSE config.clearMineAuthor', aid, ts); } catch(_) {} otherEngine?.clearAuthor?.(aid); compositeOthers(); }
         }
+        if (j && j.data && Object.prototype.hasOwnProperty.call(j.data, 'overlayStopKick')) {
+          const ts = Number(j.data.overlayStopKick) || 0;
+          const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          if (ts && ts > __lastOverlayStopTs && nowT - __BOOT_AT > 500) {
+            __lastOverlayStopTs = ts;
+            try { console.log('[sender(esm)] SSE overlayStopKick accepted', ts); } catch(_) {}
+            handleOverlayStopEvent();
+          }
+        }
       } catch(_) {}
     });
     es.addEventListener('sendAnimation', ()=>{ try { console.log('[sender(esm)] SSE sendAnimation -> start local preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} });
+    es.addEventListener('overlayStop', ()=>{ try { console.log('[sender(esm)] SSE overlayStop event'); } catch(_) {} handleOverlayStopEvent(); });
   } catch(_) {}
 })();
 
@@ -306,6 +395,7 @@ transport.onmessage = (msg) => {
       if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
       if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }
       if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
+      if (msg.type === 'overlayStop') { try { console.log('[sender(esm)] listenWS overlayStop'); } catch(_) {} handleOverlayStopEvent(); return; }
       if (msg.type === 'config' && msg.data) {
         // animKick handling
         if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
@@ -313,6 +403,15 @@ transport.onmessage = (msg) => {
           const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
           const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
           if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted -> start preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+        }
+        if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayStopKick')) {
+          const ts = Number(msg.data.overlayStopKick) || 0;
+          const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          if (ts && ts > __lastOverlayStopTs && nowT - __BOOT_AT > 500) {
+            __lastOverlayStopTs = ts;
+            try { console.log('[sender(esm)] listenWS overlayStopKick accepted', ts); } catch(_) {}
+            handleOverlayStopEvent();
+          }
         }
       }
     };
@@ -330,7 +429,7 @@ cm.onStrokePoint = ({ id, nx, ny, tool }) => { if (!SERVER_URL) return; transpor
 cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); transport.sendStroke({ type:'stroke', phase:'end', id, tool:(tool||'pen'), authorId: AUTHOR_ID }); if (!realtimeEverUsed) transport.sendFrameNow(canvasEl.toDataURL('image/png')); };
 
 // ---- UI wiring ----
-wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers });
+wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers, onOverlayToggle: handleOverlayToggle });
 // Hook into send/start buttons to clear pulses on click
 try { __sendBtn?.addEventListener('click', () => {
   window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
@@ -340,25 +439,12 @@ try { __sendBtn?.addEventListener('click', () => {
 }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
-// Ensure the start tip is visible immediately after page reload if waiting
-try {
-  if (window.__overlayWaiting) {
-    let tip = document.getElementById('senderPressStart');
-    if (!tip) {
-      tip = document.createElement('div'); tip.id='senderPressStart';
-      tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
-      const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください';
-      tip.appendChild(t); document.body.appendChild(tip);
-    }
-    tip.style.display = 'grid';
-    pulseStart(true); showStartArrow(true); try { showSendArrow(false); } catch(_) {}
-    const cd = document.getElementById('senderCountdown'); if (cd) cd.style.display='none';
-  }
-} catch(_) {}
-
 // ---- Local preview overlay (video + current drawing), synchronized by sendAnimation ----
 function startLocalPreviewAnim(){
-  if (window.__senderPreviewStarted) return; window.__senderPreviewStarted = true;
+  if (window.__senderPreviewStarted) return;
+  window.__senderPreviewStop = null;
+  window.__senderPreviewStarted = true;
+  let moveStarted = false;
   // Build overlay elements
   const wrapEl = document.getElementById('canvas-wrap') || cm.wrap || canvasEl.parentElement;
   if (!wrapEl) return;
@@ -482,6 +568,8 @@ function startLocalPreviewAnim(){
   }, rotateDelay);
 
   function startMove(){
+    if (moveStarted) return;
+    moveStarted = true;
     try { console.log('[sender(esm) preview] move down start', { moveDur }); } catch(_) {}
     inner.style.transition = `transform ${moveDur}ms ease`;
     inner.style.transform = 'translateY(120%)';
@@ -497,8 +585,10 @@ function startLocalPreviewAnim(){
       } catch(e) { try { console.warn('[sender(esm) preview] clear build error', e); } catch(_) {} }
       try { overlay.remove(); console.log('[sender(esm) preview] overlay removed'); } catch(_) {}
       window.__senderPreviewStarted = false;
+      window.__senderPreviewStop = null;
     }, moveDur + 30);
   }
+  window.__senderPreviewStop = () => { try { console.log('[sender(esm)] preview stop requested'); } catch(_) {}; startMove(); };
     // animKick kick-off for all senders (WS broadcast)
     if (Object.prototype.hasOwnProperty.call(msg.data, 'animKick')) {
       const ts = Number(msg.data.animKick)||0;

@@ -112,6 +112,14 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if (msg.type === 'overlayStop') {
+      try { console.log('[server] overlayStop via WS from', role, 'channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
+      const relay = JSON.stringify({ type: 'overlayStop' });
+      broadcast(ch, relay, () => true);
+      broadcastSSE(ch, { type: 'overlayStop' });
+      return;
+    }
+
     // Realtime stroke relay (WebSocket only). Small JSON messages.
     if (msg.type === 'stroke') {
       // Basic validation
@@ -140,7 +148,7 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'config' && msg.data && typeof msg.data === 'object') {
       // Ephemeral keys should NOT persist in channel config to avoid replay on new clients
-      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayWaiting','overlayKick','relayKick','ledTest','ledTestTs']);
+      const ephemeralKeys = new Set(['preCountStart','overlayRemainSec','overlayDescending','overlayWaiting','overlayKick','overlayStopKick','relayKick','ledTest','ledTestTs']);
       const persist = { ...(ch.config || {}) };
       // Merge only non-ephemeral keys
       for (const [k, v] of Object.entries(msg.data)) { if (!ephemeralKeys.has(k)) persist[k] = v; }

@@ -1,5 +1,5 @@
 // UI wiring for size/color/clear buttons
-export function wireUI({ canvasManager, transport, authorId, onResize }) {
+export function wireUI({ canvasManager, transport, authorId, onResize, onOverlayToggle }) {
   const sizeBtns = Array.from(document.querySelectorAll('.size-btn'));
   const colorBtns = Array.from(document.querySelectorAll('.color-btn'));
   const clearAllBtn = document.getElementById('btn-clear-all');
@@ -130,6 +130,10 @@ export function wireUI({ canvasManager, transport, authorId, onResize }) {
 
   // Overlay start trigger (for performance window)
   overlayStartBtn?.addEventListener('click', () => {
+    if (typeof onOverlayToggle === 'function') {
+      onOverlayToggle();
+      return;
+    }
     try { console.log('[sender] overlay start button clicked'); } catch(_) {}
     try {
       if (transport?.wsSend && transport.wsReady) {

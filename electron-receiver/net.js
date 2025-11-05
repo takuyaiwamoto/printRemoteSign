@@ -16,6 +16,7 @@
     let es = null; // EventSource
     let configPollTimer = null;
     let lastOverlayKick = 0;
+    let lastOverlayStopKick = 0;
     const bootAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
     const debug = (...a) => { try { log && log(...a); } catch(_) {} };
@@ -59,10 +60,21 @@
                 try { console.log('[receiver] SSE overlayKick ignored', { ts, lastOverlayKick, bootDelta: Math.round(nowT - bootAt) }); } catch(_) {}
               }
             }
+            if (Object.prototype.hasOwnProperty.call(j.data, 'overlayStopKick')) {
+              const ts = Number(j.data.overlayStopKick) || 0;
+              const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+              if (ts > lastOverlayStopKick && nowT - bootAt > 500) {
+                lastOverlayStopKick = ts; try { console.log('[receiver] SSE overlayStopKick accepted', ts); } catch(_) {}
+                onAction && onAction('overlayStop');
+              } else {
+                try { console.log('[receiver] SSE overlayStopKick ignored', { ts, lastOverlayStopKick, bootDelta: Math.round(nowT - bootAt) }); } catch(_) {}
+              }
+            }
           }
         } catch(_) {}
       });
       es.addEventListener('overlayStart', () => { try { console.log('[receiver] SSE overlayStart (event)'); } catch(_) {}; onAction && onAction('overlayStart'); });
+      es.addEventListener('overlayStop', () => { try { console.log('[receiver] SSE overlayStop (event)'); } catch(_) {}; onAction && onAction('overlayStop'); });
       es.onerror = () => { /* auto retry; keep polling too */ };
     }
     function stopSSE() { if (es) { try { es.close(); } catch(_) {}; es = null; } }
@@ -110,11 +122,13 @@
         if (msg.type === 'sendAnimation') { try { console.log('[receiver] WS sendAnimation (message)'); } catch(_) {}; onAction && onAction('sendAnimation'); return; }
         if (msg.type === 'clearMine') { onClear && onClear(msg.authorId); return; }
         if (msg.type === 'config' && msg.data) { try { console.log('[receiver] WS config'); } catch(_) {}; onConfig && onConfig(msg.data); if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayKick')) { const ts=Number(msg.data.overlayKick)||0; const nowT=(typeof performance!=='undefined'?performance.now():Date.now()); if (ts>lastOverlayKick && nowT-bootAt>1500){ lastOverlayKick=ts; try{ console.log('[receiver] WS overlayKick accepted', ts);}catch(_){} onAction && onAction('overlayStart'); } else { try{ console.log('[receiver] WS overlayKick ignored',{ts,lastOverlayKick,bootDelta:Math.round(nowT-bootAt)});}catch(_){} } }
+          if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayStopKick')) { const ts=Number(msg.data.overlayStopKick)||0; const nowT=(typeof performance!=='undefined'?performance.now():Date.now()); if (ts>lastOverlayStopKick && nowT-bootAt>500){ lastOverlayStopKick=ts; try{ console.log('[receiver] WS overlayStopKick accepted', ts);}catch(_){} onAction && onAction('overlayStop'); } else { try{ console.log('[receiver] WS overlayStopKick ignored',{ts,lastOverlayStopKick,bootDelta:Math.round(nowT-bootAt)});}catch(_){} } }
           // config-based clearMine fallback (compat)
           if (Object.prototype.hasOwnProperty.call(msg.data, 'clearMineAuthor')) { try { const aid=String(msg.data.clearMineAuthor||''); onClear && onClear(aid); } catch(_) {} }
           return; }
         if (msg.type === 'stroke') { onStroke && onStroke(msg); return; }
         if (msg.type === 'overlayStart') { try { console.log('[receiver] WS overlayStart (message)'); } catch(_) {}; onAction && onAction('overlayStart'); return; }
+        if (msg.type === 'overlayStop') { try { console.log('[receiver] WS overlayStop (message)'); } catch(_) {}; onAction && onAction('overlayStop'); return; }
       };
     }
 

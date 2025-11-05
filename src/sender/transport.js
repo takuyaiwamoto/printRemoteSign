@@ -79,4 +79,26 @@ export class Transport {
     if (this.wsSend({ type: 'sendAnimation' })) return;
     if (this.httpFallback) this.httpPost('/anim', {});
   }
+
+  sendOverlayStart() {
+    const ts = Date.now();
+    const ok = this.wsSend({ type: 'overlayStart' });
+    if (ok) {
+      this.wsSend({ type: 'config', data: { overlayKick: ts } });
+      return;
+    }
+    this.httpPost('/overlay', {});
+    this.httpPost('/config', { data: { overlayKick: ts } });
+  }
+
+  sendOverlayStop() {
+    const ts = Date.now();
+    const ok = this.wsSend({ type: 'overlayStop' });
+    if (ok) {
+      this.wsSend({ type: 'config', data: { overlayStopKick: ts } });
+      return;
+    }
+    this.httpPost('/overlay/stop', {});
+    this.httpPost('/config', { data: { overlayStopKick: ts } });
+  }
 }

@@ -24,6 +24,19 @@
       .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.25); 
              display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag; }
       .btn:hover { background: rgba(0,0,0,.35); }
+      .btn.is-active { background: rgba(37, 99, 235, 0.35); border-color: rgba(191, 219, 254, 0.7); }
+      .btn--label {
+        width: auto;
+        min-width: 64px;
+        padding: 0 12px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: .08em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
       .icon { width: 16px; height: 16px; display: block; }
       .center { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9; }
       /* Pre-count in the exact center (override top-right .count positioning) */
@@ -40,6 +53,78 @@
       .animate { transition: transform 2500ms ease; }
       .hidden { display: none; }
       .label { font-size: 28px; font-weight: 800; letter-spacing: .1em; text-shadow: 0 2px 10px rgba(0,0,0,.35); }
+      .capture-wrap {
+        position: fixed;
+        inset: 64px 16px 16px 16px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .capture-wrap:not(.hidden) { display: flex; }
+      .capture-inner {
+        position: relative;
+        pointer-events: auto;
+        background: rgba(15, 23, 42, 0.85);
+        padding: 12px;
+        border-radius: 12px;
+        box-shadow: 0 24px 55px rgba(15, 23, 42, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        backdrop-filter: blur(6px);
+      }
+      .capture-wrap.is-active {
+        inset: 0;
+        align-items: stretch;
+        justify-content: stretch;
+      }
+      .capture-wrap.is-active .capture-inner {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        background: transparent;
+        backdrop-filter: none;
+      }
+      #captureCanvas {
+        display: block;
+        background: #000;
+        border-radius: 8px;
+        max-width: 100%;
+        max-height: 100%;
+      }
+      .capture-wrap.is-active #captureCanvas {
+        border-radius: 0;
+      }
+      .capture-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: grid;
+        gap: 8px;
+        justify-items: end;
+      }
+      .capture-mini-btn {
+        appearance: none;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 12px;
+        letter-spacing: .05em;
+        cursor: pointer;
+        color: #f8fafc;
+        background: rgba(30, 41, 59, 0.85);
+        transition: background 120ms ease, border-color 120ms ease;
+      }
+      .capture-mini-btn:hover {
+        background: rgba(51, 65, 85, 0.92);
+        border-color: rgba(191, 219, 254, 0.6);
+      }
+      .capture-wrap.is-active .capture-controls {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -55,6 +140,13 @@
             <circle cx="12" cy="12" r="9"/><path d="M5 5l14 14"/>
           </svg>
         </button>
+        <button id="btn-overlay-toggle" class="btn btn--label" title="演出を開始">開始</button>
+        <button id="btn-capture" class="btn" title="画面ミラー開始">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="12" rx="2" ry="2"/>
+            <path d="M8 21h8"/>
+          </svg>
+        </button>
       </div>
     </div>
     <div id="centerLabel" class="center hidden">
@@ -63,6 +155,15 @@
     </div>
     <!-- waiting.png はプロジェクト直下に配置。overlay.html からは1つ上の階層を参照 -->
     <div id="imgWrap" class="img-wrap hidden"><img id="waitImg" src="../waiting.png" alt="waiting" /></div>
+    <div id="captureWrap" class="capture-wrap hidden">
+      <div class="capture-inner">
+        <canvas id="captureCanvas"></canvas>
+        <div class="capture-controls">
+          <button id="btn-capture-reselect" class="capture-mini-btn">領域を再選択</button>
+          <button id="btn-capture-stop" class="capture-mini-btn">停止</button>
+        </div>
+      </div>
+    </div>
     <div id="ovCount" class="count">0秒</div>
 
     <script>
@@ -73,8 +174,243 @@
       const centerMsg = center?.querySelector('.label');
       const imgWrap = document.getElementById('imgWrap');
       const waitImg = document.getElementById('waitImg');
+      const overlayToggleBtn = document.getElementById('btn-overlay-toggle');
+      const captureBtn = document.getElementById('btn-capture');
+      const captureWrap = document.getElementById('captureWrap');
+      const captureInner = captureWrap ? captureWrap.querySelector('.capture-inner') : null;
+      const captureCanvas = document.getElementById('captureCanvas');
+      const captureReselectBtn = document.getElementById('btn-capture-reselect');
+      const captureStopBtn = document.getElementById('btn-capture-stop');
+      const captureCtx = captureCanvas ? captureCanvas.getContext('2d') : null;
+      let captureStream = null;
+      let captureVideo = null;
+      let captureAnim = null;
+      let captureCrop = null;
       let overlayActive = false; // show top-right countdown only during active session
+      let overlayRunning = false;
       let preTimer = null;
+      let lastOverlayStopKick = 0;
+
+      if (captureReselectBtn) captureReselectBtn.disabled = true;
+      if (captureStopBtn) captureStopBtn.disabled = true;
+
+      function updateOverlayToggleButton() {
+        if (!overlayToggleBtn) return;
+        overlayToggleBtn.textContent = overlayRunning ? '終了' : '開始';
+        overlayToggleBtn.title = overlayRunning ? '演出を終了' : '演出を開始';
+        overlayToggleBtn.classList.toggle('is-active', overlayRunning);
+      }
+      updateOverlayToggleButton();
+
+      function setCaptureButtonState(active) {
+        if (!captureBtn) return;
+        captureBtn.classList.toggle('is-active', !!active);
+        captureBtn.title = active ? '画面ミラー停止' : '画面ミラー開始';
+      }
+
+      function getAvailableCaptureSize() {
+        const wrapRect = captureWrap?.getBoundingClientRect();
+        const rawWidth = wrapRect ? wrapRect.width : Math.max(1, window.innerWidth - 32);
+        const rawHeight = wrapRect ? wrapRect.height : Math.max(1, window.innerHeight - 80);
+        const styles = captureInner ? window.getComputedStyle(captureInner) : null;
+        const padX = styles
+          ? parseFloat(styles.paddingLeft || '0') + parseFloat(styles.paddingRight || '0')
+          : 0;
+        const padY = styles
+          ? parseFloat(styles.paddingTop || '0') + parseFloat(styles.paddingBottom || '0')
+          : 0;
+        const availWidth = Math.max(1, rawWidth - padX);
+        const availHeight = Math.max(1, rawHeight - padY);
+        return { width: availWidth, height: availHeight };
+      }
+
+      function revealCenterMessage() {
+        try {
+          center?.classList.remove('hidden');
+          if (centerMsg) { centerMsg.classList.remove('hidden'); centerMsg.style.display = 'block'; }
+          if (preCount) { preCount.classList.add('hidden'); preCount.style.display = 'none'; }
+        } catch (_) {}
+      }
+
+      function startOverlaySession() {
+        if (overlayRunning) return;
+        overlayRunning = true;
+        overlayActive = true;
+        updateOverlayToggleButton();
+        document.querySelector('.btns')?.classList.remove('hidden');
+        setAlpha(0.5);
+        try { window.OverlayApi?.setPassThrough?.(false); } catch (_) {}
+        if (preTimer) { clearInterval(preTimer); preTimer = null; }
+        if (center) center.classList.add('hidden');
+        if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display = 'none'; }
+        if (preCount) { preCount.classList.add('hidden'); preCount.style.display = 'none'; }
+        imgWrap.classList.remove('hidden');
+        imgWrap.classList.add('animate');
+        requestAnimationFrame(() => { imgWrap.classList.add('move-up'); });
+      }
+
+      function endOverlaySession({ animate = true, suppressCenterReveal = false } = {}) {
+        overlayRunning = false;
+        overlayActive = false;
+        if (preTimer) { clearInterval(preTimer); preTimer = null; }
+        updateOverlayToggleButton();
+        const countdownEl = document.getElementById('ovCount');
+        if (countdownEl) countdownEl.style.display = 'none';
+        if (animate && imgWrap?.classList.contains('move-up')) {
+          imgWrap.classList.add('animate');
+          requestAnimationFrame(() => { imgWrap.classList.remove('move-up'); });
+          if (!suppressCenterReveal) {
+            setTimeout(() => { revealCenterMessage(); }, 2500);
+          }
+        } else {
+          imgWrap?.classList.remove('move-up');
+          if (!suppressCenterReveal) {
+            revealCenterMessage();
+          }
+        }
+      }
+
+      function resizeCaptureCanvas(crop) {
+        if (!captureCanvas || !crop || crop.width <= 0 || crop.height <= 0) return;
+        const { width: availW, height: availH } = getAvailableCaptureSize();
+        if (availW <= 0 || availH <= 0) return;
+        const aspect = crop.width / crop.height;
+        let displayW = availW;
+        let displayH = displayW / aspect;
+        if (displayH > availH) {
+          displayH = availH;
+          displayW = displayH * aspect;
+        }
+        const dpr = window.devicePixelRatio || 1;
+        captureCanvas.width = Math.max(1, Math.round(displayW * dpr));
+        captureCanvas.height = Math.max(1, Math.round(displayH * dpr));
+        captureCanvas.style.width = `${Math.round(displayW)}px`;
+        captureCanvas.style.height = `${Math.round(displayH)}px`;
+      }
+
+      function stopCapture() {
+        if (captureAnim) { cancelAnimationFrame(captureAnim); captureAnim = null; }
+        if (captureVideo) {
+          try { captureVideo.pause(); } catch(_) {}
+          try { captureVideo.srcObject = null; } catch(_) {}
+          try { captureVideo.remove(); } catch(_) {}
+          captureVideo = null;
+        }
+        if (captureStream) {
+          try { captureStream.getTracks().forEach((t) => t.stop()); } catch(_) {}
+          captureStream = null;
+        }
+        captureCrop = null;
+        if (captureWrap) {
+          captureWrap.classList.add('hidden');
+          captureWrap.classList.remove('is-active');
+        }
+        setCaptureButtonState(false);
+        if (captureReselectBtn) captureReselectBtn.disabled = true;
+        if (captureStopBtn) captureStopBtn.disabled = true;
+      }
+
+      function renderCaptureFrame() {
+        if (!captureCtx || !captureVideo || !captureCrop || !captureStream) {
+          captureAnim = null;
+          return;
+        }
+        try {
+          if (captureVideo.readyState >= 2) {
+            captureCtx.drawImage(
+              captureVideo,
+              captureCrop.x,
+              captureCrop.y,
+              captureCrop.width,
+              captureCrop.height,
+              0,
+              0,
+              captureCanvas.width,
+              captureCanvas.height
+            );
+          }
+        } catch (_) {}
+        captureAnim = requestAnimationFrame(renderCaptureFrame);
+      }
+
+      function ensureCaptureLoop() {
+        if (captureAnim) return;
+        captureAnim = requestAnimationFrame(renderCaptureFrame);
+      }
+
+      async function beginCapture(info) {
+        if (!info || !info.sourceId || !captureCtx) return;
+        if (captureStream) stopCapture();
+        captureCrop = info.crop;
+        if (captureWrap) {
+          captureWrap.classList.remove('hidden');
+          captureWrap.classList.add('is-active');
+        }
+        resizeCaptureCanvas(captureCrop);
+        requestAnimationFrame(() => {
+          if (captureCrop) resizeCaptureCanvas(captureCrop);
+        });
+        setCaptureButtonState(true);
+        if (captureReselectBtn) captureReselectBtn.disabled = false;
+        if (captureStopBtn) captureStopBtn.disabled = false;
+        if (!captureVideo) {
+          captureVideo = document.createElement('video');
+          captureVideo.playsInline = true;
+          captureVideo.muted = true;
+          captureVideo.style.position = 'absolute';
+          captureVideo.style.width = '1px';
+          captureVideo.style.height = '1px';
+          captureVideo.style.opacity = '0';
+          document.body.appendChild(captureVideo);
+        }
+        const targetWidth = info.display?.width || 1920;
+        const targetHeight = info.display?.height || 1080;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: info.sourceId,
+                minWidth: targetWidth,
+                maxWidth: targetWidth,
+                minHeight: targetHeight,
+                maxHeight: targetHeight,
+                minFrameRate: 10,
+                maxFrameRate: 30,
+              }
+            }
+          });
+          captureStream = stream;
+          captureVideo.srcObject = stream;
+          await captureVideo.play().catch(() => {});
+          ensureCaptureLoop();
+        } catch (err) {
+          console.error('[overlay] capture start failed', err);
+          stopCapture();
+        }
+      }
+
+      async function selectCaptureArea() {
+        if (!window.OverlayApi?.selectCaptureArea) return;
+        try {
+          if (captureBtn) captureBtn.disabled = true;
+          if (captureReselectBtn) captureReselectBtn.disabled = true;
+          if (captureStopBtn) captureStopBtn.disabled = true;
+          const info = await window.OverlayApi.selectCaptureArea();
+          if (info && info.crop && info.crop.width > 0 && info.crop.height > 0) {
+            await beginCapture(info);
+          } else if (!captureStream) {
+            stopCapture();
+          }
+        } catch (err) {
+          console.error('[overlay] capture area select failed', err);
+        } finally {
+          if (captureBtn) captureBtn.disabled = false;
+          if (captureReselectBtn) captureReselectBtn.disabled = !!captureStream;
+          if (captureStopBtn) captureStopBtn.disabled = !captureStream;
+        }
+      }
 
       // 既定は半透明（--alpha=0.5）
       function setAlpha(a){ document.documentElement.style.setProperty('--alpha', String(a)); }
@@ -82,6 +418,7 @@
       fullBtn?.addEventListener('click', () => { window.OverlayApi?.goFullscreen?.(); });
 
       clearBtn?.addEventListener('click', () => {
+        endOverlaySession({ animate: false, suppressCenterReveal: true });
         // 背景を完全透明にしてボタンも隠す。中央に「透明中」を表示
         setAlpha(0);
         document.querySelector('.btns')?.classList.add('hidden');
@@ -92,6 +429,33 @@
         setTimeout(() => { window.OverlayApi?.setPassThrough?.(true); }, 50);
         // 透明時は待機画像をフルで表示
         imgWrap.classList.remove('hidden');
+      });
+
+      captureBtn?.addEventListener('click', () => {
+        if (captureStream) stopCapture();
+        else selectCaptureArea();
+      });
+      captureReselectBtn?.addEventListener('click', () => {
+        selectCaptureArea();
+      });
+      captureStopBtn?.addEventListener('click', () => {
+        stopCapture();
+      });
+
+      overlayToggleBtn?.addEventListener('click', () => {
+        if (overlayRunning) {
+          endOverlaySession({ animate: true });
+        } else {
+          startOverlaySession();
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        if (captureCrop) resizeCaptureCanvas(captureCrop);
+      });
+
+      window.addEventListener('beforeunload', () => {
+        stopCapture();
       });
 
       // --- Networking: subscribe to overlayStart via SSE ---
@@ -122,6 +486,10 @@
             // Do NOT move here; receiver will trigger actual start via IPC after 3s
             overlayActive = true; // enable top-right countdown display during session
           });
+          es.addEventListener('overlayStop', () => {
+            try { console.log('[overlay] overlayStop'); } catch(_) {}
+            endOverlaySession({ animate: true });
+          });
           es.addEventListener('config', (ev) => { try {
             const j = JSON.parse(ev.data);
             if (j && j.data) {
@@ -139,20 +507,15 @@
                     else { el.style.color = '#fff'; el.style.textShadow = '0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6'; }
                   }
                   else { el.style.display='none'; }
+                  if (left <= 0) overlayActive = false;
                 }
-                // When countdown hits 0, start moving back down immediately
-                if (left === 0 && imgWrap.classList.contains('move-up')) {
-                  try { console.log('[overlay] countdown zero -> moving back'); } catch(_) {}
-                  imgWrap.classList.remove('move-up');
-                  overlayActive = false;
-                  // after descent finishes (2.5s), show waiting message again
-                  setTimeout(() => {
-                    try {
-                      center.classList.remove('hidden');
-                      centerMsg && (centerMsg.classList.remove('hidden'), centerMsg.style.display='block');
-                      preCount && (preCount.classList.add('hidden'), preCount.style.display='none');
-                    } catch(_) {}
-                  }, 2500);
+              }
+              if (Object.prototype.hasOwnProperty.call(j.data, 'overlayStopKick')) {
+                const ts = Number(j.data.overlayStopKick) || 0;
+                if (ts && ts > lastOverlayStopKick) {
+                  lastOverlayStopKick = ts;
+                  try { console.log('[overlay] overlayStopKick accepted', ts); } catch(_) {}
+                  endOverlaySession({ animate: true });
                 }
               }
             }
@@ -164,15 +527,11 @@
       try {
         window.OverlayApi?.onOverlayStart?.(() => {
           try { console.log('[overlay] overlayStart via IPC'); } catch(_) {}
-          // Move up immediately on IPC (3s delay handled by receiver)
-          try {
-            // 確実にメッセージ非表示、カウントも消す（上昇開始時点で完了）
-            if (centerMsg) { centerMsg.classList.add('hidden'); centerMsg.style.display = 'none'; }
-            if (preCount) { preCount.classList.add('hidden'); preCount.style.display = 'none'; if (preTimer) { clearInterval(preTimer); preTimer = null; } }
-          } catch(_) {}
-          imgWrap.classList.remove('hidden');
-          imgWrap.classList.add('animate');
-          requestAnimationFrame(() => { imgWrap.classList.add('move-up'); });
+          startOverlaySession();
+        });
+        window.OverlayApi?.onOverlayStop?.(() => {
+          try { console.log('[overlay] overlayStop via IPC'); } catch(_) {}
+          endOverlaySession({ animate: true });
         });
       } catch(_) {}
 

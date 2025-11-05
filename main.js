@@ -54,6 +54,7 @@
   const pulseStart = (on)=>{ try { overlayStartBtn?.classList.toggle('btn-pulse-blue', !!on); } catch(_) {} };
   const pulseSend = (on)=>{ try { sendBtn?.classList.toggle('btn-pulse-red', !!on); } catch(_) {} };
   let sentThisWindow = false; // reset when waiting or new session starts
+  let __lastOverlayStopTs = 0;
   // Arrow cue handling for legacy build
   function positionStartArrow(){
     try {
@@ -145,7 +146,9 @@
 
   function startLocalPreviewAnim(){
     if (window.__senderPreviewStarted) { try { console.log('[sender preview] already running; skip'); } catch(_) {} return; }
+    window.__senderPreviewStop = null;
     window.__senderPreviewStarted = true;
+    let moveStarted = false;
     try { console.log('[sender preview] start', { animType: __S_PREVIEW_ANIM_TYPE, rotDelay: __S_PREVIEW_ROT_DELAY_SEC, moveDelay: __S_PREVIEW_MOVE_DELAY_SEC }); } catch(_) {}
     const wrapEl = document.getElementById('canvas-wrap') || wrap;
     if (!wrapEl) { try { console.warn('[sender preview] wrap element not found'); } catch(_) {} return; }
@@ -234,6 +237,8 @@
     }, rotateDelay);
 
     function startMove(){
+      if (moveStarted) return;
+      moveStarted = true;
       try { console.log('[sender preview] move down start', { moveDur }); } catch(_) {}
       inner.style.transition = `transform ${moveDur}ms ease`;
       inner.style.transform = 'translateY(120%)';
@@ -247,16 +252,115 @@
         } catch(e) { try { console.warn('[sender preview] clear build error', e); } catch(_) {} }
         try{ overlay.remove(); console.log('[sender preview] overlay removed'); }catch(_){}
         window.__senderPreviewStarted=false;
+        window.__senderPreviewStop = null;
       }, moveDur + 30);
     }
+    window.__senderPreviewStop = () => { try { console.log('[sender preview] stop requested'); } catch(_) {}; startMove(); };
   }
   function showStartPrompt(){
     try {
       let tip = document.getElementById('senderPressStart');
-      if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
+      if (!tip) {
+        tip = document.createElement('div'); tip.id='senderPressStart';
+        tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
+        const t=document.createElement('div'); t.id='senderPressStartLabel'; t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;';
+        t.textContent='開始を押してください';
+        tip.appendChild(t); document.body.appendChild(tip);
+      }
+      const label = document.getElementById('senderPressStartLabel') || tip.firstChild;
+      label.textContent = window.__overlayWaiting ? '開始を押してください' : '終了を押してください';
       tip.style.display = 'grid';
       pulseStart(true);
     } catch(_) {}
+  }
+
+  function hideStartPrompt(){
+    try { const tip = document.getElementById('senderPressStart'); if (tip) tip.style.display = 'none'; } catch(_) {}
+  }
+
+  function updateOverlayStartButton(){
+    try {
+      if (!overlayStartBtn) return;
+      const waiting = !!window.__overlayWaiting;
+      overlayStartBtn.textContent = waiting ? '開始' : '終了';
+      overlayStartBtn.setAttribute('title', waiting ? '演出を開始' : '演出を終了');
+      overlayStartBtn.setAttribute('aria-pressed', waiting ? 'false' : 'true');
+      overlayStartBtn.classList.toggle('is-active', !waiting);
+    } catch(_) {}
+  }
+
+  function applyOverlayWaitingState(waiting){
+    const isWaiting = !!waiting;
+    window.__overlayWaiting = isWaiting;
+    updateOverlayStartButton();
+    pulseStart(isWaiting);
+    showStartArrow(isWaiting);
+    if (isWaiting) {
+      sentThisWindow = false;
+      pulseSend(false);
+      try { showSendArrow(false); } catch(_) {}
+      showStartPrompt();
+    } else {
+      hideStartPrompt();
+    }
+    try {
+      const el = document.getElementById('senderCountdown');
+      if (el && isWaiting) el.style.display = 'none';
+    } catch(_) {}
+  }
+
+  function handleOverlayStopEvent() {
+    applyOverlayWaitingState(true);
+    try {
+      if (typeof window.__senderPreviewStop === 'function') {
+        window.__senderPreviewStop();
+      }
+    } catch(_) {}
+  }
+
+  function sendOverlayStartSignal() {
+    const ts = Date.now();
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'overlayStart' })); } catch(_) {}
+      try { ws.send(JSON.stringify({ type: 'config', data: { overlayKick: ts } })); } catch(_) {}
+    } else if (SERVER_URL) {
+      const httpBase = toHttpBase(SERVER_URL).replace(/\/$/, '');
+      fetch(`${httpBase}/overlay?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { overlayKick: ts } })
+      }).catch(() => {});
+    }
+  }
+
+  function sendOverlayStopSignal() {
+    const ts = Date.now();
+    if (wsReady) {
+      try { ws.send(JSON.stringify({ type: 'overlayStop' })); } catch(_) {}
+      try { ws.send(JSON.stringify({ type: 'config', data: { overlayStopKick: ts } })); } catch(_) {}
+    } else if (SERVER_URL) {
+      const httpBase = toHttpBase(SERVER_URL).replace(/\/$/, '');
+      fetch(`${httpBase}/overlay/stop?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
+      fetch(`${httpBase}/config?channel=${encodeURIComponent(CHANNEL)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { overlayStopKick: ts } })
+      }).catch(() => {});
+    }
+    __lastOverlayStopTs = ts;
+  }
+
+  function handleOverlayToggle() {
+    const waiting = !!window.__overlayWaiting;
+    if (waiting) {
+      sentThisWindow = false;
+      sendOverlayStartSignal();
+      applyOverlayWaitingState(false);
+    } else {
+      sendOverlayStopSignal();
+      handleOverlayStopEvent();
+    }
   }
 
   // 背景と自分/他者レイヤ構成
@@ -371,7 +475,19 @@
     es.addEventListener('config', (ev) => {
       try {
         const m = JSON.parse(ev.data);
-        if (m && m.data) __applySenderAnimConfigFromMsg(m.data);
+        if (m && m.data) {
+          __applySenderAnimConfigFromMsg(m.data);
+          if (Object.prototype.hasOwnProperty.call(m.data, 'overlayWaiting')) {
+            applyOverlayWaitingState(m.data.overlayWaiting);
+          }
+          if (Object.prototype.hasOwnProperty.call(m.data, 'overlayStopKick')) {
+            const ts = Number(m.data.overlayStopKick) || 0;
+            if (ts && ts > (__lastOverlayStopTs || 0)) {
+              __lastOverlayStopTs = ts;
+              handleOverlayStopEvent();
+            }
+          }
+        }
       } catch(_) {}
     });
     es.addEventListener('sendAnimation', () => {
@@ -380,10 +496,16 @@
       try { window.__sentThisWindow = true; } catch(_) {}
       try { startLocalPreviewAnim(); } catch(_) {}
     });
+    es.addEventListener('overlayStop', () => {
+      try { console.log('[sender(main)] SSE overlayStop event'); } catch(_) {}
+      handleOverlayStopEvent();
+    });
   }
 
   // Default to waiting to avoid showing countdown at boot
   window.__overlayWaiting = true;
+  updateOverlayStartButton();
+  applyOverlayWaitingState(window.__overlayWaiting);
   
   // ---- Extra WS listener (receiver role) to receive server broadcasts even if not sent to senders ----
   (function listenAsReceiver(){
@@ -412,6 +534,22 @@
         }
         if (msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'clearMineAuthor')) {
           try { const aid = String(msg.data.clearMineAuthor||''); otherEngine?.clearAuthor?.(aid); composeOthers(); } catch(_) {}
+          return;
+        }
+        if (msg.type === 'overlayStop') {
+          handleOverlayStopEvent();
+          return;
+        }
+        if (msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayStopKick')) {
+          const ts = Number(msg.data.overlayStopKick) || 0;
+          if (ts && ts > __lastOverlayStopTs) {
+            __lastOverlayStopTs = ts;
+            handleOverlayStopEvent();
+          }
+          return;
+        }
+        if (msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
+          applyOverlayWaitingState(msg.data.overlayWaiting);
           return;
         }
       };
@@ -493,22 +631,17 @@
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'preCountSec')) {
           const v = Number(msg.data.preCountSec); if (isFinite(v)) window.__preCountSec = Math.max(0, Math.min(10, Math.round(v)));
         }
-        if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
-          window.__overlayWaiting = !!msg.data.overlayWaiting;
-          // start button pulse while waiting; reset send when back to waiting
-          pulseStart(window.__overlayWaiting === true);
-          showStartArrow(window.__overlayWaiting === true);
-          if (window.__overlayWaiting) { sentThisWindow = false; pulseSend(false); try { showSendArrow(false); } catch(_) {} }
-          const el = document.getElementById('senderCountdown'); if (el && window.__overlayWaiting) el.style.display = 'none';
+        if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayStopKick')) {
+          const ts = Number(msg.data.overlayStopKick) || 0;
+          const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          if (ts && ts > __lastOverlayStopTs && nowT - __BOOT_AT > 500) {
+            __lastOverlayStopTs = ts;
+            try { console.log('[sender(main)] config.overlayStopKick accepted', ts); } catch(_) {}
+            handleOverlayStopEvent();
+          }
         }
-        // NOTE: overlayDescending is ignored for the tip. Tip is controlled only by overlayWaiting.
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'overlayWaiting')) {
-          try {
-            let tip = document.getElementById('senderPressStart');
-            if (!tip) { tip = document.createElement('div'); tip.id='senderPressStart'; tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;'; const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください'; tip.appendChild(t); document.body.appendChild(tip); }
-            tip.style.display = msg.data.overlayWaiting ? 'grid' : 'none';
-            if (msg.data.overlayWaiting) showStartArrow(true); else showStartArrow(false);
-          } catch(_) {}
+          applyOverlayWaitingState(msg.data.overlayWaiting);
         }
         if (msg && msg.type === 'config' && msg.data && Object.prototype.hasOwnProperty.call(msg.data,'animKick')) {
           const ts = Number(msg.data.animKick)||0;
@@ -553,6 +686,10 @@
           try { console.log('[sender(main)] WS sendAnimation received -> start local preview'); } catch(_) {}
           try { pulseSend(false); showSendArrow(false); } catch(_) {}
           try { startLocalPreviewAnim(); } catch(_) {}
+        }
+        if (msg && msg.type === 'overlayStop') {
+          try { console.log('[sender(main)] WS overlayStop received'); } catch(_) {}
+          handleOverlayStopEvent();
         }
         if (msg && msg.type === 'clear') {
           // 背景は維持し、描画のみ消す
@@ -942,36 +1079,9 @@
 
   // ---- Overlay start trigger (for overlay window) ----
   overlayStartBtn?.addEventListener('click', () => {
-    try { console.log('[sender(main)] overlay start button clicked'); } catch(_) {}
-    pulseStart(false); showStartArrow(false); sentThisWindow = false; // entering session
-    if (wsReady) {
-      try { console.log('[sender(main)] sending overlayStart via WS'); ws.send(JSON.stringify({ type: 'overlayStart' })); } catch (_) {}
-      // 互換性のため config でもキックを送る
-      try { ws.send(JSON.stringify({ type:'config', data:{ overlayKick: Date.now() } })); } catch(_) {}
-    } else if (httpFallback && SERVER_URL) {
-      const httpBase = SERVER_URL.replace(/^wss?:\/\//i, (m) => m.toLowerCase() === 'wss://' ? 'https://' : 'http://');
-      try { console.log('[sender(main)] sending overlayStart via HTTP fallback'); } catch(_) {}
-      fetch(`${httpBase.replace(/\/$/, '')}/overlay?channel=${encodeURIComponent(CHANNEL)}`, { method: 'POST' }).catch(() => {});
-      // config経由のフォールバック
-      fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: { overlayKick: Date.now() } }) }).catch(()=>{});
-    }
+    try { console.log('[sender(main)] overlay toggle button clicked'); } catch(_) {}
+    handleOverlayToggle();
   });
-
-  // Ensure the start tip is visible on reload while waiting
-  try {
-    if (window.__overlayWaiting) {
-      let tip = document.getElementById('senderPressStart');
-      if (!tip) {
-        tip = document.createElement('div'); tip.id='senderPressStart';
-        tip.style.cssText='position:fixed;inset:0;display:none;place-items:center;z-index:10001;pointer-events:none;';
-        const t=document.createElement('div'); t.style.cssText='font-size:48px;font-weight:800;color:#ffffff;text-shadow:0 0 10px #3b82f6,0 0 22px #3b82f6,0 0 34px #3b82f6;'; t.textContent='開始を押してください';
-        tip.appendChild(t); document.body.appendChild(tip);
-      }
-      tip.style.display = 'grid';
-      pulseStart(true); showStartArrow(true);
-      const el = document.getElementById('senderCountdown'); if (el) el.style.display = 'none';
-    }
-  } catch(_) {}
 
   eraserBtn?.addEventListener('click', () => {
     eraserActive = !eraserActive;

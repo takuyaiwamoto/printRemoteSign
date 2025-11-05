@@ -8,7 +8,8 @@ contextBridge.exposeInMainWorld('PrintBridge', {
 
 // Overlay control bridge (to notify overlay window from receiver renderer)
 contextBridge.exposeInMainWorld('OverlayBridge', {
-  triggerStart: () => { try { ipcRenderer.send('overlay:trigger', 'start'); } catch(_) {} }
+  triggerStart: () => { try { ipcRenderer.send('overlay:trigger', 'start'); } catch(_) {} },
+  triggerStop: () => { try { ipcRenderer.send('overlay:trigger', 'stop'); } catch(_) {} }
 });
 
 // Pre-count notification from receiver to overlay (start 3-2-1)

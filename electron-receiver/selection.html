@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Capture Selection</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: rgba(0, 0, 0, 0.25);
+        cursor: crosshair;
+        user-select: none;
+        height: 100%;
+      }
+      body {
+        position: relative;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      #selection {
+        position: absolute;
+        border: 2px solid #3b82f6;
+        background: rgba(59, 130, 246, 0.25);
+        display: none;
+        pointer-events: none;
+      }
+      #info {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.85);
+        color: #f9fafb;
+        font-size: 14px;
+        letter-spacing: .02em;
+        pointer-events: none;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="selection"></div>
+    <div id="info">ドラッグして領域を選択 / Escでキャンセル</div>
+    <script src="selection.js"></script>
+  </body>
+</html>

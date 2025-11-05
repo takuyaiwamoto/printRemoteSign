@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const { execFile } = require('child_process');
 const os = require('os');
 const fs = require('fs');
@@ -47,12 +47,12 @@ function createOverlayWindow() {
       x: primary.workArea.x + 40,
       y: primary.workArea.y + 40,
       frame: false,
-      transparent: true,
+      transparent: false,
       alwaysOnTop: true,
       resizable: true,
       movable: true,
       hasShadow: false,
-      backgroundColor: '#00000000',
+      backgroundColor: '#111111',
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
@@ -92,14 +92,127 @@ function createOverlayWindow() {
 
     // Forward triggers from receiver renderer to overlay window
     ipcMain.on('overlay:trigger', (_ev, type) => {
-      try { overlayWin?.webContents?.send('overlay:start', type); } catch(_) {}
+      try {
+        if (type === 'start') {
+          overlayWin?.webContents?.send('overlay:start', 'start');
+        } else if (type === 'stop') {
+          overlayWin?.webContents?.send('overlay:stop');
+        }
+      } catch(_) {}
     });
     ipcMain.on('overlay:precount', () => {
       try { overlayWin?.webContents?.send('overlay:precount'); } catch(_) {}
     });
+
+    ipcMain.handle('overlay:select-capture', async () => {
+      if (!overlayWin) return null;
+      try {
+        const overlayBounds = overlayWin.getBounds();
+        const display = screen.getDisplayMatching(overlayBounds) || screen.getPrimaryDisplay();
+        const wasVisible = overlayWin.isVisible();
+        const wasOnTop = overlayWin.isAlwaysOnTop();
+        if (wasOnTop) overlayWin.setAlwaysOnTop(false);
+        if (wasVisible) overlayWin.hide();
+
+        const selection = await openSelectionWindow(display);
+
+        if (wasVisible) { overlayWin.show(); overlayWin.focus(); }
+        if (wasOnTop) overlayWin.setAlwaysOnTop(true, 'floating');
+
+        if (!selection || selection.width < 4 || selection.height < 4) return null;
+
+        const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+        const displayId = String(display.id);
+        let source = sources.find((s) => s.display_id === displayId);
+        if (!source) source = sources[0];
+        if (!source) return null;
+
+        const scale = display.scaleFactor || 1;
+        const crop = {
+          x: Math.round(selection.x * scale),
+          y: Math.round(selection.y * scale),
+          width: Math.round(selection.width * scale),
+          height: Math.round(selection.height * scale),
+        };
+        const displayPixels = {
+          width: Math.round(display.size.width * scale),
+          height: Math.round(display.size.height * scale),
+        };
+        return {
+          sourceId: source.id,
+          crop,
+          display: displayPixels,
+          scaleFactor: scale,
+        };
+      } catch (e) {
+        console.error('[overlay] capture select failed', e);
+        return null;
+      }
+    });
   } catch (e) {
     console.error('[overlay] create error', e);
   }
+}
+
+function openSelectionWindow(display) {
+  return new Promise((resolve) => {
+    let finished = false;
+    const completeChannel = `selection:complete:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const cancelChannel = `selection:cancel:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+    const cleanup = (result) => {
+      if (finished) return;
+      finished = true;
+      try { ipcMain.removeAllListeners(completeChannel); } catch(_) {}
+      try { ipcMain.removeAllListeners(cancelChannel); } catch(_) {}
+      try { selWin?.close(); } catch(_) {}
+      resolve(result);
+    };
+
+    const selWin = new BrowserWindow({
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      focusable: true,
+      fullscreenable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        contextIsolation: true,
+        sandbox: true,
+        preload: path.join(__dirname, 'selection-preload.js'),
+      },
+    });
+
+    ipcMain.once(completeChannel, (_ev, rect) => cleanup(rect));
+    ipcMain.once(cancelChannel, () => cleanup(null));
+    selWin.once('closed', () => cleanup(null));
+
+    selWin.setAlwaysOnTop(true, 'screen-saver');
+    selWin.loadFile('selection.html');
+    selWin.once('ready-to-show', () => {
+      try { selWin.show(); } catch(_) {}
+    });
+    selWin.webContents.once('did-finish-load', () => {
+      try {
+        selWin.webContents.send('selection:init', {
+          bounds: display.bounds,
+          scaleFactor: display.scaleFactor || 1,
+          completeChannel,
+          cancelChannel,
+        });
+      } catch (_) {
+        cleanup(null);
+      }
+    });
+  });
 }
 
 app.whenReady().then(() => {

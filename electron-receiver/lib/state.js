@@ -5,17 +5,26 @@
 })(typeof self !== 'undefined' ? self : this, function(busMod){
   function createStateMachine({ preCountSecGetter, bus, overlayStartCb, countdownStartCb, playAudioCb }){
     let running = false;
+    let startTimer = null;
     function isRunning(){ return running; }
     function start(){
       if (running) return; running = true;
       try { playAudioCb && playAudioCb(); } catch(_) {}
       try { bus && bus.publishPreCountStart && bus.publishPreCountStart(); } catch(_) {}
       const preSec = Math.max(0, Math.round(Number(preCountSecGetter && preCountSecGetter() || 3)));
-      setTimeout(()=>{ try { overlayStartCb && overlayStartCb(); } catch(_) {} try { countdownStartCb && countdownStartCb(); } catch(_) {} }, preSec * 1000);
+      if (startTimer) { clearTimeout(startTimer); startTimer = null; }
+      startTimer = setTimeout(()=>{
+        startTimer = null;
+        if (!running) return;
+        try { overlayStartCb && overlayStartCb(); } catch(_) {}
+        try { countdownStartCb && countdownStartCb(); } catch(_) {}
+      }, preSec * 1000);
     }
-    function reset(){ running = false; }
+    function reset(){
+      running = false;
+      if (startTimer) { clearTimeout(startTimer); startTimer = null; }
+    }
     return { start, reset, isRunning };
   }
   return { createStateMachine };
 });
-

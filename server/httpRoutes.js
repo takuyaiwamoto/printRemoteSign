@@ -110,6 +110,17 @@ function registerHttpRoutes(app, hooks = {}) {
     res.json({ ok: true });
   });
 
+  app.post('/overlay/stop', (req, res) => {
+    const channelName = req.query.channel || 'default';
+    const ch = getChannel(channelName);
+    const msg = { type: 'overlayStop' };
+    const txt = JSON.stringify(msg);
+    try { console.log('[server] /overlay/stop trigger channel=', channelName, 'clients=', ch.clients.size); } catch(_) {}
+    broadcast(ch, txt, () => true);
+    broadcastSSE(ch, msg);
+    res.json({ ok: true });
+  });
+
   app.get('/config', (req, res) => {
     const channelName = req.query.channel || 'default';
     const ch = getChannel(channelName);
