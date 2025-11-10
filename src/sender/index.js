@@ -11,6 +11,7 @@ try { const v = document.getElementById('sender-version'); if (v) v.textContent 
 const qs = new URLSearchParams(location.search);
 const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
 const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
+const OTHER_BUFFER_MS = Number(qs.get('otherBuffer') ?? SHARED_CONST?.OTHER_BUFFER_MS ?? 200);
 // Hide countdown at boot until receiver clears waiting flag
 window.__overlayWaiting = true;
 
@@ -24,7 +25,7 @@ try { console.log('[sender(esm)] canvas size', { w: canvasEl.width, h: canvasEl.
 // Other strokes engine draws into `othersEl` if present (overlay)
 // Remote strokes already carry the effective eraser size (we send 3x).
 // To avoid double-scaling on other senders, keep eraserScale = 1.0 here.
-const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: 200, eraserScale: 1.0 }) || null);
+const otherEngine = (window.SenderShared?.otherStrokes?.create?.({ canvas: (othersEl || cm.canvas), dpr: cm.DPR, bufferMs: OTHER_BUFFER_MS, eraserScale: 1.0 }) || null);
 try { console.log('[sender(esm)] otherEngine', otherEngine ? 'ready' : 'missing'); } catch(_) {}
 function resizeLayers(){
   try {

@@ -56,7 +56,7 @@
         const id = String(msg.id || Date.now());
         const p = { x: msg.nx * baseCanvas.width, y: msg.ny * baseCanvas.height, time: performance.now() };
         const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN)) ? (msg.sizeN * baseCanvas.width) : (Number(msg.size || 4) * DPR);
-        const s = { author: String(msg.authorId || 'anon'), tool:(msg.tool||'pen'), color: msg.color || '#000', sizeCss: Number(msg.size||4), sizeDev, points: [p], drawnUntil: 0, ended: false };
+        const s = { author: String(msg.authorId || 'anon'), tool:(msg.tool||'pen'), color: msg.color || '#000', sizeCss: Number(msg.size||4), sizeDev, points: [p], drawnUntil: 0, ended: false, leadDrawn: false };
         strokes.set(id, s);
         const lay = getAuthorLayer(s.author).ctx;
         lay.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
@@ -80,14 +80,39 @@
       const now = performance.now();
       const target = now - STROKE_BUFFER_MS;
       for (const [id, s] of strokes) {
-        const readySegment = (() => { for (let i = s.points.length - 1; i >= 2; i--) if (s.points[i].time <= target) return i; return 0; })();
+        if (!s.leadDrawn && s.points.length >= 2) {
+          const second = s.points[1];
+          if (second.time <= target || s.ended) {
+            const ctxLead = getAuthorLayer(String(s.author)).ctx;
+            ctxLead.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
+            ctxLead.lineJoin = 'round'; ctxLead.lineCap = 'round'; ctxLead.strokeStyle = s.color;
+            ctxLead.lineWidth = (s.tool==='eraser'?1.3:1.0) * (s.sizeDev || (s.sizeCss * DPR));
+            ctxLead.beginPath();
+            ctxLead.moveTo(s.points[0].x, s.points[0].y);
+            ctxLead.lineTo(second.x, second.y);
+            ctxLead.stroke();
+            s.leadDrawn = true;
+          }
+        }
+        let readySegment = (() => { for (let i = s.points.length - 1; i >= 2; i--) if (s.points[i].time <= target) return i; return 0; })();
+        if (s.ended) readySegment = Math.max(readySegment, s.points.length - 1);
         if (s.curIndex === undefined) {
           if (readySegment >= 2) {
-            s.curIndex = 2; s.t = 0; const p0 = s.points[0], p1 = s.points[1]; s.lastPt = { x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2 };
+            s.curIndex = 2;
+            s.t = 0;
+            const p0 = s.points[0], p1 = s.points[1];
+            s.lastPt = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
           } else if (s.ended && s.points.length === 1) {
             const p = s.points[0];
             const ctx = getAuthorLayer(String(s.author)).ctx;
             ctx.beginPath(); ctx.fillStyle = s.color; const r=(s.sizeDev || (s.sizeCss * DPR))/2; ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+            strokes.delete(id); continue;
+          } else if (s.ended && s.points.length === 2) {
+            const ctx = getAuthorLayer(String(s.author)).ctx;
+            ctx.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
+            ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = s.color;
+            ctx.lineWidth = (s.tool==='eraser'?1.3:1.0) * (s.sizeDev || (s.sizeCss * DPR));
+            ctx.beginPath(); ctx.moveTo(s.points[0].x, s.points[0].y); ctx.lineTo(s.points[1].x, s.points[1].y); ctx.stroke();
             strokes.delete(id); continue;
           } else { continue; }
         }
@@ -98,13 +123,16 @@
         const qPoint = (m1,p1,m2,t)=>{const a=1-t; return {x:a*a*m1.x+2*a*t*p1.x+t*t*m2.x,y:a*a*m1.y+2*a*t*p1.y+t*t*m2.y};};
         while (s.curIndex <= readySegment) {
           const i = s.curIndex; const p0=s.points[i-2], p1=s.points[i-1], p2=s.points[i];
-          const m1={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2}, m2={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-          const segLen=Math.hypot(m2.x-m1.x,m2.y-m1.y)+1e-3; const stepPx=Math.max(0.8*DPR,0.5*s.sizeCss*DPR);
+          const m1={x:(p0.x+p1.x)/2,y:(p0.y+p1.y)/2};
+          const isFinalSegment = s.ended && (i >= s.points.length - 1);
+          const m2={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+          const endPoint = isFinalSegment ? { x: p2.x, y: p2.y } : m2;
+          const segLen=Math.hypot(endPoint.x-m1.x,endPoint.y-m1.y)+1e-3; const stepPx=Math.max(0.8*DPR,0.5*s.sizeCss*DPR);
           const dt=Math.min(0.35, Math.max(0.02, stepPx/segLen));
           const dur=Math.max(1,(p2.time||0)-(p1.time||0)); const timeT=Math.max(0, Math.min(1,(target-(p1.time||0))/dur));
-          const desiredT=(i<readySegment)?1:timeT;
-          while(s.t<desiredT-1e-6){ const nt=Math.min(desiredT, s.t+dt); const np=qPoint(m1,p1,m2,nt); ctx.lineTo(np.x,np.y); s.lastPt=np; s.t=nt; drew=true; if(s.t>=1-1e-6) break; }
-          if (s.t>=1-1e-6){ s.curIndex++; s.t=0; s.lastPt={...m2}; } else break;
+          const desiredT=(i<readySegment || isFinalSegment)?1:timeT;
+          while(s.t<desiredT-1e-6){ const nt=Math.min(desiredT, s.t+dt); const np=qPoint(m1,p1,endPoint,nt); ctx.lineTo(np.x,np.y); s.lastPt=np; s.t=nt; drew=true; if(s.t>=1-1e-6) break; }
+          if (s.t>=1-1e-6){ s.curIndex++; s.t=0; s.lastPt={...endPoint}; } else break;
         }
         if (drew) ctx.stroke();
         const lastSegment=s.points.length-1; if (s.ended && s.curIndex>lastSegment) strokes.delete(id);

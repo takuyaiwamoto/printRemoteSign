@@ -3,12 +3,13 @@
   const SENDER_VERSION = SHARED_CONST?.VERSION || '0.9.6';
   try { const v = document.getElementById('sender-version'); if (v) v.textContent = `v${SENDER_VERSION}`; } catch (_) {}
   // ----- constants / debug -----
+  const qs = new URLSearchParams(location.search);
   const RATIO = SHARED_CONST?.RATIO_A4 ?? (210 / 297); // A4 縦: 幅 / 高さ（約 0.707）
   const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, SHARED_CONST?.DPR_MAX ?? 3));
   const ERASER_SCALE = 3.0;            // 消しゴムはペンの3倍
-  const OTHER_BUFFER_MS = SHARED_CONST?.OTHER_BUFFER_MS ?? 200;      // 他者描画のスムージング遅延
+  const OTHER_BUFFER_MS = Number(qs.get('otherBuffer') ?? SHARED_CONST?.OTHER_BUFFER_MS ?? 200);
   const SEND_INTERVAL_MS = 150;        // PNG送信の間引き（通常OFF）
-  const SDEBUG = String((new URLSearchParams(location.search)).get('sdebug') || window.DEBUG_SENDER || '') === '1';
+  const SDEBUG = String(qs.get('sdebug') || window.DEBUG_SENDER || '') === '1';
   const slog = (...a) => { if (SDEBUG) console.log('[sender]', ...a); };
 
   const wrap = document.getElementById('canvas-wrap');
@@ -37,7 +38,6 @@
   let brushColor = colorInput?.value || '#000000';
 
   // --- Sync (optional): send frames to a WebSocket relay server ---
-  const qs = new URLSearchParams(location.search);
   const SERVER_URL = (qs.get('server') || (window.SERVER_URL || '')).trim();
   const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
   let ws = null;

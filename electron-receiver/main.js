@@ -14,7 +14,8 @@ function createWindow() {
 
   const server = process.env.SERVER_URL || fileCfg.server || 'ws://localhost:8787';
   const channel = process.env.CHANNEL || fileCfg.channel || 'default';
-  const bufferMs = Number(process.env.BUFFER_MS || fileCfg.bufferMs || 300);
+  // 300ms だと線の描画開始が目視で遅れるため、デフォルトを 60ms に短縮
+  const bufferMs = Number(process.env.BUFFER_MS || fileCfg.bufferMs || 60);
 
   const win = new BrowserWindow({
     width: 900,

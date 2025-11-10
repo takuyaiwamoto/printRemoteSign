@@ -90,7 +90,8 @@
   setTimeout(() => { fitCanvas(); applyBoxTransform(); try { window.ReceiverConfig?.drawBackground?.(base); } catch(_) {} }, 60);
 
   // Realtime stroke rendering state (moved to StrokeEngine)
-  const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 200))));
+  // 受信初動の空白を避けるためデフォルトバッファを 60ms まで圧縮
+  const STROKE_BUFFER_MS = Math.min(1000, Math.max(0, Number(params.get('buffer') || (window.RECEIVER_BUFFER_MS ?? 60))));
   window.StrokeEngine?.init?.({ dpr: DPR, base: baseCanvas, ink: inkCanvas, bufferMs: STROKE_BUFFER_MS });
 
   function setStatus(text) { statusEl.textContent = text; }
