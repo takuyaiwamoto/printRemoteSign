@@ -74,10 +74,18 @@ wss.on('connection', (ws, req) => {
   if (ch.config && Object.keys(ch.config).length) {
     try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch (_) {}
   }
-  // Provide default animation type B on fresh channels
+  // Provide defaults on fresh channels (non-destructive)
   if (!ch.config || !ch.config.animType) {
-    ch.config = { ...(ch.config||{}), animType: 'B', animAudioVol: (ch.config?.animAudioVol ?? 30) };
+    ch.config = { ...(ch.config||{}), animType: 'A', animAudioVol: (ch.config?.animAudioVol ?? 30) };
     try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch(_) {}
+  }
+  if (!ch.config || !ch.config.bgSender) {
+    ch.config = { ...(ch.config||{}), bgSender: { mode: 'image', url: 'enoguM.png' } };
+    try { ws.send(JSON.stringify({ type: 'config', data: { bgSender: ch.config.bgSender } })); } catch(_) {}
+  }
+  if (!ch.config || !ch.config.bgReceiver) {
+    ch.config = { ...(ch.config||{}), bgReceiver: { mode: 'image', url: 'enoguM.png' } };
+    try { ws.send(JSON.stringify({ type: 'config', data: { bgReceiver: ch.config.bgReceiver } })); } catch(_) {}
   }
 
   ws.on('message', (raw) => {

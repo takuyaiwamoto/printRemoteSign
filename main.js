@@ -11,6 +11,7 @@
   const SEND_INTERVAL_MS = 150;        // PNG送信の間引き（通常OFF）
   const SDEBUG = String(qs.get('sdebug') || window.DEBUG_SENDER || '') === '1';
   const slog = (...a) => { if (SDEBUG) console.log('[sender]', ...a); };
+  window.__animEnabled = false; // default OFF unless config enables
 
   const wrap = document.getElementById('canvas-wrap');
   const canvas = document.getElementById('paint');
@@ -127,6 +128,7 @@
   let __S_PREVIEW_ROT_DELAY_SEC = 0;
   let __S_PREVIEW_MOVE_DELAY_SEC = 0;
   let __S_PREVIEW_STAY_SEC = 0;
+  const shouldPlayPreview = () => window.__animEnabled === true;
   function __applySenderAnimConfigFromMsg(data){
     try {
       if (!data || typeof data !== 'object') return;
@@ -141,10 +143,15 @@
       if (typeof data.overlayStaySec !== 'undefined') {
         const s = Number(data.overlayStaySec); if (isFinite(s)) __S_PREVIEW_STAY_SEC = Math.max(0, Math.min(120, Math.round(s)));
       }
+      if (typeof data.animEnabled !== 'undefined') {
+        window.__animEnabled = !!data.animEnabled;
+        try { console.log('[sender(main)] animEnabled set', window.__animEnabled); } catch(_) {}
+      }
     } catch(_) {}
   }
 
   function startLocalPreviewAnim(){
+    if (!shouldPlayPreview()) { try { console.log('[sender(main)] anim disabled -> skip local preview'); } catch(_) {} return; }
     if (window.__senderPreviewStarted) { try { console.log('[sender preview] already running; skip'); } catch(_) {} return; }
     window.__senderPreviewStop = null;
     window.__senderPreviewStarted = true;
@@ -491,10 +498,14 @@
       } catch(_) {}
     });
     es.addEventListener('sendAnimation', () => {
-      try { console.log('[sender(main)] SSE sendAnimation -> start local preview'); } catch(_) {}
+      try { console.log('[sender(main)] SSE sendAnimation'); } catch(_) {}
       try { pulseSend(false); showSendArrow(false); } catch(_) {}
       try { window.__sentThisWindow = true; } catch(_) {}
-      try { startLocalPreviewAnim(); } catch(_) {}
+      if (shouldPlayPreview()) {
+        try { startLocalPreviewAnim(); } catch(_) {}
+      } else {
+        try { console.log('[sender(main)] anim disabled -> skip preview (SSE sendAnimation)'); } catch(_) {}
+      }
     });
     es.addEventListener('overlayStop', () => {
       try { console.log('[sender(main)] SSE overlayStop event'); } catch(_) {}
@@ -650,8 +661,12 @@
           const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
           if (ts > window.__senderAnimKickTs && nowT - bootAt > 1500) {
             window.__senderAnimKickTs = ts;
-            try { console.log('[sender(main)] config.animKick accepted -> start local preview', ts); } catch(_) {}
-            try { startLocalPreviewAnim(); } catch(_) {}
+            try { console.log('[sender(main)] config.animKick accepted', ts); } catch(_) {}
+            if (shouldPlayPreview()) {
+              try { startLocalPreviewAnim(); } catch(_) {}
+            } else {
+              try { console.log('[sender(main)] anim disabled -> skip preview (config.animKick)'); } catch(_) {}
+            }
           } else {
             try { console.log('[sender(main)] config.animKick ignored', { ts, last: window.__senderAnimKickTs, bootDelta: Math.round(nowT-bootAt) }); } catch(_) {}
             // If ignored due to boot window, schedule a one-shot retry after the remaining time
@@ -662,7 +677,11 @@
                   window.__senderAnimKickRetry = null;
                   if ((window.__senderAnimKickTs||0) < ts && !window.__senderPreviewStarted) {
                     window.__senderAnimKickTs = ts; try { console.log('[sender(main)] animKick delayed accept after boot'); } catch(_) {}
-                    try { startLocalPreviewAnim(); } catch(_) {}
+                    if (shouldPlayPreview()) {
+                      try { startLocalPreviewAnim(); } catch(_) {}
+                    } else {
+                      try { console.log('[sender(main)] anim disabled -> skip preview (animKick retry)'); } catch(_) {}
+                    }
                   }
                 }, Math.max(100, wait));
               }
@@ -683,9 +702,13 @@
           otherEngine?.handle?.(msg);
         }
         if (msg && msg.type === 'sendAnimation') {
-          try { console.log('[sender(main)] WS sendAnimation received -> start local preview'); } catch(_) {}
+          try { console.log('[sender(main)] WS sendAnimation received'); } catch(_) {}
           try { pulseSend(false); showSendArrow(false); } catch(_) {}
-          try { startLocalPreviewAnim(); } catch(_) {}
+          if (shouldPlayPreview()) {
+            try { startLocalPreviewAnim(); } catch(_) {}
+          } else {
+            try { console.log('[sender(main)] anim disabled -> skip preview (WS sendAnimation)'); } catch(_) {}
+          }
         }
         if (msg && msg.type === 'overlayStop') {
           try { console.log('[sender(main)] WS overlayStop received'); } catch(_) {}

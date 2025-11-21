@@ -524,7 +524,7 @@
   }
   function tryStartAnimation(){
     if (window.ReceiverConfig?.getAnimEnabled && window.ReceiverConfig.getAnimEnabled() === false) {
-      return tryStartAnimA();
+      return tryStartAnimA(); // no video/audio
     }
     const t = (window.ReceiverConfig?.getAnimType?.() || 'A').toUpperCase();
     if (t === 'B') return tryStartAnimB();

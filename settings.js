@@ -208,6 +208,14 @@
   printRotate180?.addEventListener('change', ()=>{
     sendPrintRotate180(printRotate180.checked);
   });
+  // Send default animEnabled=false at load (once)
+  (function sendDefaultAnimOff(){
+    const data = { animEnabled: false };
+    const msg = { type: 'config', data };
+    if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify(msg)); } catch(_) {} }
+    fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+  })();
 
   // Audio volume for animation B
   const volEl = document.getElementById('animAudioVol');
