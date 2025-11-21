@@ -115,6 +115,18 @@
           { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
         return;
       }
+      if (target === 'animEnabled') {
+        const panel = document.getElementById('animEnabledPanel');
+        panel?.querySelectorAll('.card').forEach(el => el.classList.remove('is-active'));
+        card.classList.add('is-active');
+        const enabled = card.getAttribute('data-enabled') === '1';
+        const data = { animEnabled: enabled };
+        const msg = { type: 'config', data };
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
+        fetch(`${httpBase(SERVER_URL)}/config?channel=${encodeURIComponent(CHANNEL)}`,
+          { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data }) }).catch(()=>{});
+        return;
+      }
       if (target === 'rotate') {
         // toggle active state within rotate panel
         const panel = document.getElementById('rotatePanel');

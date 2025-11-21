@@ -14,6 +14,7 @@ const CHANNEL = (qs.get('channel') || (window.CHANNEL || 'default')).trim();
 const OTHER_BUFFER_MS = Number(qs.get('otherBuffer') ?? SHARED_CONST?.OTHER_BUFFER_MS ?? 200);
 // Hide countdown at boot until receiver clears waiting flag
 window.__overlayWaiting = true;
+window.__animEnabled = false; // default OFF unless config enables
 
 // ---- Canvas setup ----
 const canvasEl = document.getElementById('paint');
@@ -243,6 +244,9 @@ transport.onmessage = (msg) => {
       if (typeof msg.data.bgSender === 'string') { cm.setBackgroundWhite(); }
       else if (msg.data.bgSender.mode === 'image' && msg.data.bgSender.url) { cm.setBackgroundImage(msg.data.bgSender.url); }
     }
+    if (typeof msg.data.animEnabled !== 'undefined') {
+      window.__animEnabled = !!msg.data.animEnabled;
+    }
     // preCount start (guard boot/stale)
     if (Object.prototype.hasOwnProperty.call(msg.data, 'preCountStart')) {
       const ts = Number(msg.data.preCountStart)||0; const nowT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -303,7 +307,7 @@ transport.onmessage = (msg) => {
     try { console.log('[sender(esm)] WS sendAnimation received -> start local preview'); } catch(_) {}
     try { pulseSend(false); showSendArrow(false); } catch(_) {}
     try { window.__sentThisWindow = true; } catch(_) {}
-    try { startLocalPreviewAnim(); } catch(_) {}
+    if (window.__animEnabled === true) { try { startLocalPreviewAnim(); } catch(_) {} }
   }
   if (msg.type === 'overlayStop') {
     try { console.log('[sender(esm)] WS overlayStop received'); } catch(_) {}
@@ -354,7 +358,7 @@ transport.onmessage = (msg) => {
         const ts = Number(j.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
         const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
         const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
-        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted -> start local preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+        if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] SSE animKick accepted', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} if (window.__animEnabled === true) { try { startLocalPreviewAnim(); } catch(_) {} } else { try { console.log('[sender(esm)] anim disabled -> skip preview (SSE animKick)'); } catch(_) {} } }
       }
         // also handle clearMine via config
         if (j && j.data && Object.prototype.hasOwnProperty.call(j.data,'clearMineAuthor')) {
@@ -395,7 +399,7 @@ transport.onmessage = (msg) => {
       if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; try { if (msg.phase==='start'||msg.phase==='end') console.log('[sender(esm)] listenWS stroke', msg.phase, {id:msg.id, author:msg.authorId}); } catch(_) {} otherEngine?.handle?.(msg); return; }
       if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
       if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }
-      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation -> start preview'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} return; }
+      if (msg.type === 'sendAnimation') { try { console.log('[sender(esm)] listenWS sendAnimation'); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} if (window.__animEnabled === true) { try { startLocalPreviewAnim(); } catch(_) {} } else { try { console.log('[sender(esm)] anim disabled -> skip preview (listenWS sendAnimation)'); } catch(_) {} } return; }
       if (msg.type === 'overlayStop') { try { console.log('[sender(esm)] listenWS overlayStop'); } catch(_) {} handleOverlayStopEvent(); return; }
       if (msg.type === 'config' && msg.data) {
         // animKick handling
@@ -403,7 +407,7 @@ transport.onmessage = (msg) => {
           const ts = Number(msg.data.animKick)||0; const last = (window.__senderAnimKickTs||0);
           const bootAt = window.__senderBootAt || (window.__senderBootAt = (typeof performance!=='undefined'?performance.now():Date.now()));
           const nowT = (typeof performance!=='undefined'?performance.now():Date.now());
-          if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted -> start preview', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} try { startLocalPreviewAnim(); } catch(_) {} }
+          if (ts > last && nowT - bootAt > 1500) { window.__senderAnimKickTs = ts; try { console.log('[sender(esm)] listenWS animKick accepted', ts); } catch(_) {} try { pulseSend(false); showSendArrow(false); } catch(_) {} try { window.__sentThisWindow = true; } catch(_) {} if (window.__animEnabled === true) { try { startLocalPreviewAnim(); } catch(_) {} } else { try { console.log('[sender(esm)] anim disabled -> skip preview (listenWS animKick)'); } catch(_) {} } }
         }
         if (Object.prototype.hasOwnProperty.call(msg.data, 'overlayStopKick')) {
           const ts = Number(msg.data.overlayStopKick) || 0;
@@ -442,6 +446,10 @@ try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStart
 
 // ---- Local preview overlay (video + current drawing), synchronized by sendAnimation ----
 function startLocalPreviewAnim(){
+  if (window.__animEnabled !== true) {
+    try { console.log('[sender(esm)] anim disabled -> skip local preview'); } catch(_) {}
+    return;
+  }
   if (window.__senderPreviewStarted) return;
   window.__senderPreviewStop = null;
   window.__senderPreviewStarted = true;

@@ -523,6 +523,9 @@
     } catch(_) {}
   }
   function tryStartAnimation(){
+    if (window.ReceiverConfig?.getAnimEnabled && window.ReceiverConfig.getAnimEnabled() === false) {
+      return tryStartAnimA();
+    }
     const t = (window.ReceiverConfig?.getAnimType?.() || 'A').toUpperCase();
     if (t === 'B') return tryStartAnimB();
     return tryStartAnimA();

@@ -135,6 +135,21 @@
         </div>
       </div>
       <div class="row">
+        <div class="panel" id="animEnabledPanel">
+          <div class="head">アニメーション ON/OFF</div>
+          <div class="choices">
+            <div class="card" data-target="animEnabled" data-enabled="1">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='280'%3E%3Crect width='100%25' height='100%25' fill='%232563eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='28' fill='white'%3EON%3C/text%3E%3C/svg%3E" alt="ON"/>
+              <div class="label">あり</div>
+            </div>
+            <div class="card is-active" data-target="animEnabled" data-enabled="0">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='280'%3E%3Crect width='100%25' height='100%25' fill='%23e5e7eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='28' fill='%23151826'%3EOFF%3C/text%3E%3C/svg%3E" alt="OFF"/>
+              <div class="label">なし（既定）</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
         <div class="panel" id="rotatePanel">
           <div class="head">受信キャンバスの回転</div>
           <div class="choices">
