@@ -3,6 +3,7 @@ const { execFile } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const SIGN_DIR = path.join(os.homedir(), 'sign');
 
 function createWindow() {
   // 設定の優先順位: 環境変数 > config.json > デフォルト
@@ -235,12 +236,10 @@ ipcMain.on('print-ink', async (ev, payload) => {
     // Try CUPS `lp` path first to force plain paper (MediaType=stationery). Fallback to webContents.print.
     const tryLpFirst = process.platform === 'darwin' || process.platform === 'linux';
 
-    async function printViaLp(dataUrl){
+    async function printViaLp(buf){
       return new Promise((resolve, reject) => {
         try {
-          const m = String(dataUrl||'').match(/^data:image\/\w+;base64,(.*)$/);
-          if (!m) return reject(new Error('invalid_dataurl'));
-          const buf = Buffer.from(m[1], 'base64');
+          if (!buf) return reject(new Error('invalid_buffer'));
           const tmp = path.join(os.tmpdir(), `print_${Date.now()}_${Math.random().toString(36).slice(2)}.png`);
           fs.writeFileSync(tmp, buf);
           const args = [
@@ -249,8 +248,8 @@ ipcMain.on('print-ink', async (ev, payload) => {
             '-o', 'MediaType=stationery',
             '-o', 'InputSlot=tray-1',
             '-o', 'print-quality=Normal',
-            // Force borderless Hagaki postcard (100x148 mm)
-            '-o', 'PageSize=Postcard.Fullbleed',
+          // B6 custom size (125 x 176 mm)
+          '-o', 'PageSize=Custom.125x176mm',
             tmp
           ];
           console.log('[print][lp] exec lp', args.join(' '));
@@ -262,12 +261,26 @@ ipcMain.on('print-ink', async (ev, payload) => {
         } catch(e){ reject(e); }
       });
     }
+    // Decode once and save backup to sign folder
+    let pngBuffer = null;
+    try {
+      const m = String(payload?.dataURL||'').match(/^data:image\/\w+;base64,(.*)$/);
+      if (m) pngBuffer = Buffer.from(m[1], 'base64');
+    } catch(e){ console.warn('[print] decode error', e?.message||e); }
+    if (pngBuffer) {
+      try {
+        fs.mkdirSync(SIGN_DIR, { recursive: true });
+        const backupPath = path.join(SIGN_DIR, `print_${Date.now()}.png`);
+        fs.writeFileSync(backupPath, pngBuffer);
+        console.log('[print] backup saved to', backupPath);
+      } catch(e){ console.warn('[print] backup save failed', e?.message||e); }
+    }
     // Hidden window to render the image for printing (fallback route)
     const win = new BrowserWindow({ show: false, webPreferences: { offscreen: false } });
     const html = `<!doctype html><html><head><meta charset='utf-8'><style>
       html,body{margin:0;padding:0}
-      @page { size: 100mm 148mm; margin: 0; }
-      .wrap{width:100mm;height:148mm;display:flex;align-items:center;justify-content:center}
+      @page { size: 125mm 176mm; margin: 0; }
+      .wrap{width:125mm;height:176mm;display:flex;align-items:center;justify-content:center}
       img{max-width:100%;max-height:100%;}
     </style></head><body><div class='wrap'><img id='p' src='${payload?.dataURL || ''}'/></div></body></html>`;
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
@@ -276,7 +289,7 @@ ipcMain.on('print-ink', async (ev, payload) => {
       try {
         if (tryLpFirst) {
           try {
-            await printViaLp(payload?.dataURL||'');
+            await printViaLp(pngBuffer);
             try { win.close(); } catch(_) {}
             return;
           } catch (e) {
@@ -296,8 +309,8 @@ ipcMain.on('print-ink', async (ev, payload) => {
           deviceName,
           printBackground: true,
           margins: { marginType: 'none' },
-          // Hagaki postcard = 100 x 148 mm
-          pageSize: { width: 100000, height: 148000 },
+          // B6 = 125 x 176 mm (values in microns)
+          pageSize: { width: 125000, height: 176000 },
           landscape: false,
         }, (success, errorType) => {
           try { win.close(); } catch(_) {}

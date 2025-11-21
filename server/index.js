@@ -80,11 +80,11 @@ wss.on('connection', (ws, req) => {
     try { ws.send(JSON.stringify({ type: 'config', data: ch.config })); } catch(_) {}
   }
   if (!ch.config || !ch.config.bgSender) {
-    ch.config = { ...(ch.config||{}), bgSender: { mode: 'image', url: 'enoguM.png' } };
+    ch.config = { ...(ch.config||{}), bgSender: { mode: 'image', url: 'enoguM1.png' } };
     try { ws.send(JSON.stringify({ type: 'config', data: { bgSender: ch.config.bgSender } })); } catch(_) {}
   }
   if (!ch.config || !ch.config.bgReceiver) {
-    ch.config = { ...(ch.config||{}), bgReceiver: { mode: 'image', url: 'enoguM.png' } };
+    ch.config = { ...(ch.config||{}), bgReceiver: { mode: 'image', url: 'enoguM1.png' } };
     try { ws.send(JSON.stringify({ type: 'config', data: { bgReceiver: ch.config.bgReceiver } })); } catch(_) {}
   }
 
