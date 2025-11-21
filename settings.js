@@ -27,9 +27,8 @@
     } else {
       let finalUrl = url;
       if (!/^https?:/i.test(finalUrl)) {
-        // Prefer explicit assets base for sender so Pages配下を指す
-        if (part === 'sender' && ASSET_BASE) finalUrl = ASSET_BASE.replace(/\/$/, '/') + finalUrl.replace(/^\/+/, '');
-        else finalUrl = absoluteIfPossible(finalUrl);
+        // そのまま相対パスを送る（back2.png と同じ扱い）
+        finalUrl = absoluteIfPossible(finalUrl);
       }
       data[part === 'receiver' ? 'bgReceiver' : 'bgSender'] = { mode: 'image', url: finalUrl };
     }
@@ -88,8 +87,8 @@
     if (!u) return u;
     if (/^https?:/i.test(u)) return u;
     if (location.protocol === 'file:') {
-      if (ASSET_BASE) return (ASSET_BASE.replace(/\/$/, '/') + u.replace(/^\/+/, ''));
-      return '../' + u.replace(/^\/+/, '');
+      // file:// ではそのまま相対パスを使う
+      return u.replace(/^\/+/, '');
     }
     return u;
   }
