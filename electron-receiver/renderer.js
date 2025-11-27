@@ -507,16 +507,34 @@
     try {
       const ov = window.ReceiverConfig?.getPrintRotate180?.(); // null => follow screen
       const rotateDeg = (ov === true) ? 180 : (ov === false) ? 0 : Number(window.ReceiverConfig?.getRotateDeg?.() || 0);
-      const src = inkCanvas; if (!src) return;
-      const w = src.width, h = src.height;
-      const off = document.createElement('canvas');
-      // rotate if 180 selected
-      if (rotateDeg === 180) { off.width = w; off.height = h; const g = off.getContext('2d'); g.translate(w, h); g.rotate(Math.PI); g.drawImage(src, 0, 0); }
-      else { off.width = w; off.height = h; off.getContext('2d').drawImage(src, 0, 0); }
-      const dataURL = off.toDataURL('image/png');
+      const w = Math.max(baseCanvas?.width || 0, inkCanvas?.width || 0);
+      const h = Math.max(baseCanvas?.height || 0, inkCanvas?.height || 0);
+      if (!w || !h) return;
+      // Recompose fresh snapshot to avoid transient blank frames
+      const combined = document.createElement('canvas');
+      combined.width = w; combined.height = h;
+      const cg = combined.getContext('2d');
+      try { window.ReceiverConfig?.drawBackground?.(cg); } catch(_) {}
+      try { window.StrokeEngine?.compositeTo?.(cg); } catch(_) {}
+
+      // ink-only snapshot from StrokeEngine
+      const inkSnap = document.createElement('canvas'); inkSnap.width = w; inkSnap.height = h;
+      try { window.StrokeEngine?.compositeTo?.(inkSnap.getContext('2d')); } catch(_) {}
+
+      // apply rotation if needed
+      const rotateCanvas = (src) => {
+        const r = document.createElement('canvas'); r.width = w; r.height = h;
+        const g = r.getContext('2d'); g.translate(w, h); g.rotate(Math.PI); g.drawImage(src, 0, 0);
+        return r;
+      };
+      const finalCombined = (rotateDeg === 180) ? rotateCanvas(combined) : combined;
+      const finalInk = (rotateDeg === 180) ? rotateCanvas(inkSnap) : inkSnap;
+
+      const dataURL = finalCombined.toDataURL('image/png');
+      const inkDataURL = finalInk.toDataURL('image/png');
       try { console.log('[receiver] prepared PNG length=', dataURL?.length||0, 'rotateDeg=', rotateDeg, 'override=', ov); } catch(_) {}
       if (typeof window.PrintBridge?.printInk === 'function') {
-        window.PrintBridge.printInk({ dataURL });
+        window.PrintBridge.printInk({ dataURL, inkDataURL });
       } else {
         console.error('[receiver] PrintBridge not available');
       }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, desktopCapturer, nativeImage } = require('electron');
 const { execFile } = require('child_process');
 const os = require('os');
 const fs = require('fs');
@@ -231,7 +231,25 @@ app.on('window-all-closed', () => {
 ipcMain.on('print-ink', async (ev, payload) => {
   try {
     const targetName = 'Brother_MFC_J6983CDW';
-    console.log('[print] received job payload bytes=', (payload?.dataURL||'').length);
+    const printData = payload?.inkDataURL || payload?.dataURL || '';
+    console.log('[print] received job payload bytes=', printData.length);
+    // Save a copy of the image that will be printed
+    try {
+      const saveSrc = await rotateDataUrl180(payload?.dataURL || '');
+      const m = String(saveSrc||'').match(/^data:image\/\w+;base64,(.*)$/);
+      if (m) {
+        const buf = Buffer.from(m[1], 'base64');
+        const saveDir = '/Users/a14881/Documents/printRemotoSign/only';
+        fs.mkdirSync(saveDir, { recursive: true });
+        const savePath = path.join(saveDir, `print_${Date.now()}.png`);
+        fs.writeFileSync(savePath, buf);
+        console.log('[print] saved copy to', savePath);
+      }
+    } catch(e) { console.warn('[print] save copy failed', e?.message||e); }
+
+    // Save combined image (enoguM1 background + sign) to Comb folder (non-blocking)
+    try { saveCombWithBackground(payload?.inkDataURL || payload?.dataURL || ''); } catch(e) { console.warn('[print] save comb failed', e?.message||e); }
+
     // Try CUPS `lp` path first to force plain paper (MediaType=stationery). Fallback to webContents.print.
     const tryLpFirst = process.platform === 'darwin' || process.platform === 'linux';
 
@@ -269,14 +287,14 @@ ipcMain.on('print-ink', async (ev, payload) => {
       @page { size: 125mm 176mm; margin: 0; }
       .wrap{width:125mm;height:176mm;display:flex;align-items:center;justify-content:center}
       img{max-width:100%;max-height:100%;}
-    </style></head><body><div class='wrap'><img id='p' src='${payload?.dataURL || ''}'/></div></body></html>`;
+    </style></head><body><div class='wrap'><img id='p' src='${printData}'/></div></body></html>`;
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     // Give the image a moment to load in renderer OR try CUPS first
     setTimeout(async () => {
       try {
         if (tryLpFirst) {
           try {
-            await printViaLp(payload?.dataURL||'');
+            await printViaLp(printData);
             try { win.close(); } catch(_) {}
             return;
           } catch (e) {
@@ -313,3 +331,48 @@ ipcMain.on('print-ink', async (ev, payload) => {
     console.error('print-ink error', e);
   }
 });
+
+// Rotate a dataURL 180deg (PNG). Returns rotated dataURL or original on failure.
+async function rotateDataUrl180(dataUrl){
+  if (!dataUrl) return dataUrl;
+  const win = new BrowserWindow({ show:false, webPreferences:{ offscreen:true, webSecurity:false } });
+  try {
+    await win.loadURL('about:blank');
+    const script = `
+      (async () => {
+        const src = ${JSON.stringify(dataUrl)};
+        const load = (u) => new Promise((res, rej) => { const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=u; });
+        const img = await load(src);
+        const w = img.naturalWidth || img.width || 1;
+        const h = img.naturalHeight || img.height || 1;
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const g = c.getContext('2d');
+        g.translate(w, h); g.rotate(Math.PI); g.drawImage(img, 0, 0);
+        return c.toDataURL('image/png');
+      })();
+    `;
+    const rotated = await win.webContents.executeJavaScript(script, true);
+    return rotated || dataUrl;
+  } catch(e) {
+    console.warn('[rotate] failed', e?.message||e);
+    return dataUrl;
+  } finally {
+    try { win.destroy(); } catch(_) {}
+  }
+}
+
+// Compose sign over enoguM1.png and save to Comb folder
+async function saveCombWithBackground(dataUrl){
+  if (!dataUrl) return;
+  const combDir = '/Users/a14881/Documents/printRemotoSign/Comb';
+  fs.mkdirSync(combDir, { recursive: true });
+  try {
+    const m = String(dataUrl||'').match(/^data:image\/\w+;base64,(.*)$/);
+    if (!m) { console.warn('[comb] dataURL parse failed'); return; }
+    const outPath = path.join(combDir, `comb_${Date.now()}.png`);
+    fs.writeFileSync(outPath, Buffer.from(m[1], 'base64'));
+    console.log('[comb] saved', outPath);
+  } catch(e) {
+    console.warn('[comb] save error', e?.message||e);
+  }
+}
