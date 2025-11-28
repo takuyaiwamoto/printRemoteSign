@@ -435,12 +435,32 @@ cm.onStrokeEnd = ({ id, tool }) => { if (!SERVER_URL) return; flushBatch(); tran
 
 // ---- UI wiring ----
 wireUI({ canvasManager: cm, transport, authorId: AUTHOR_ID, onResize: resizeLayers, onOverlayToggle: handleOverlayToggle });
+// Toast for send completion
+let __sendToastTimer = null;
+function showSendDoneToast(){
+  const btn = __sendBtn; if (!btn) return;
+  let toast = document.getElementById('sendDoneToast');
+  if (!toast) {
+    toast = document.createElement('div'); toast.id = 'sendDoneToast'; toast.textContent = '送信完了';
+    toast.style.cssText = 'position:fixed;z-index:9999;padding:6px 10px;background:rgba(37,99,235,0.95);color:#fff;font-size:12px;font-weight:700;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none;transform:translate(-50%,-110%);transition:opacity 120ms ease;';
+    toast.style.opacity = '0';
+    document.body.appendChild(toast);
+  }
+  const r = btn.getBoundingClientRect();
+  toast.style.left = (r.left + r.width/2) + 'px';
+  toast.style.top = r.top + 'px';
+  toast.style.display = 'block';
+  toast.style.opacity = '1';
+  if (__sendToastTimer) clearTimeout(__sendToastTimer);
+  __sendToastTimer = setTimeout(() => { toast.style.opacity='0'; toast.style.display='none'; }, 3000);
+}
 // Hook into send/start buttons to clear pulses on click
 try { __sendBtn?.addEventListener('click', () => {
   window.__sentThisWindow = true; pulseSend(false); try { showSendArrow(false); } catch(_) {}
   // NOTE: Fast local clear disabled to avoid blank snapshot on sender during animation
   try { console.log('[sender(esm)] send clicked'); } catch(_) {}
   // Preview will start via WS broadcast for all senders
+  showSendDoneToast();
 }); } catch(_) {}
 try { __startBtn?.addEventListener('click', () => { pulseStart(false); showStartArrow(false); window.__sentThisWindow = false; }); } catch(_) {}
 
