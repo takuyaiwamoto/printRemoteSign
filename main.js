@@ -1076,6 +1076,29 @@
     } catch(_) {}
   });
 
+  // Toast helper for send button
+  let sendDoneTimer = null;
+  function showSendDoneToast(){
+    if (!sendBtn) return;
+    let toast = document.getElementById('sendDoneToast');
+    if (!toast) {
+      toast = document.createElement('div'); toast.id = 'sendDoneToast'; toast.textContent = '送信完了';
+      toast.style.cssText = 'position:fixed;z-index:9999;padding:6px 10px;background:rgba(37,99,235,0.95);color:#fff;font-size:12px;font-weight:700;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none;transform:translate(-50%,-110%);transition:opacity 120ms ease;';
+      toast.style.opacity = '0';
+      document.body.appendChild(toast);
+    }
+    const r = sendBtn.getBoundingClientRect();
+    toast.style.left = (r.left + r.width/2) + 'px';
+    toast.style.top = r.top + 'px';
+    toast.style.display = 'block';
+    toast.style.opacity = '1';
+    if (sendDoneTimer) clearTimeout(sendDoneTimer);
+    sendDoneTimer = setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.display = 'none';
+    }, 3000);
+  }
+
   // ---- Send animation trigger (broadcast to receivers) ----
   sendBtn?.addEventListener('click', () => {
     try { console.log('[sender(main)] send button clicked'); } catch(_) {}
@@ -1098,6 +1121,7 @@
         fetch(`${httpBase.replace(/\/$/, '')}/config?channel=${encodeURIComponent(CHANNEL)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: data.data }) }).catch(()=>{});
       }
     } catch(_) {}
+    showSendDoneToast();
   });
 
   // ---- Overlay start trigger (for overlay window) ----
