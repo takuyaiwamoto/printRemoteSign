@@ -341,6 +341,8 @@ transport.onmessage = (msg) => {
     es.addEventListener('clearMine', (ev) => { try { const j=JSON.parse(ev.data); const aid=String(j?.authorId||''); otherEngine?.clearAuthor?.(aid); compositeOthers(); } catch(_) {} });
     es.addEventListener('stroke', (ev) => {
       try {
+        // Avoid double-consumption when sender-role WS is active
+        if (transport?.wsReadyFlag) return;
         const msg = JSON.parse(ev.data);
         if (!msg || msg.type !== 'stroke') return;
         if (msg.authorId && msg.authorId === AUTHOR_ID) return;

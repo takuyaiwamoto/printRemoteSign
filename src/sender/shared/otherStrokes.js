@@ -9,6 +9,7 @@
     const DIST_THRESH_SQ = Math.pow(0.75 * DPR, 2);
     const otherLayers = new Map(); // authorId -> {canvas, ctx}
     const strokes = new Map();     // strokeId -> state
+    const logDup = (...args) => { try { if (typeof globalThis !== 'undefined' && globalThis.__strokeDebug) console.warn(...args); } catch(_) {} };
 
     const getW = () => canvas.width;
     const getH = () => canvas.height;
@@ -43,29 +44,41 @@
 
     function handle(msg) {
       if (!msg || msg.type !== 'stroke') return;
-      if (msg.phase === 'start') {
+      // Expand batch payloads (HTTP fallback) before normal handling
+      if (msg.phase === 'batch' && Array.isArray(msg.batch)) {
+        for (const ev of msg.batch) {
+          handle({ ...ev, type: 'stroke' });
+        }
+        return;
+      }
+      const phase = msg.phase;
+      const id = String(msg.id || '');
+      if (!phase || !id) return;
+      if (phase === 'start') {
+        const existing = strokes.get(id);
+        // Multiple transports (WS + SSE) may deliver the same start; ignore to avoid resetting state
+        if (existing && !existing.ended) { logDup('[otherStrokes] duplicate start ignored', { id, author: msg.authorId }); return; }
         const wNow = Math.max(1, getW());
         const sizeDev = (typeof msg.sizeN === 'number' && isFinite(msg.sizeN))
           ? (msg.sizeN * wNow)
           : (Number(msg.size || 4) * DPR);
         const p = { x: msg.nx * getW(), y: msg.ny * getH(), time: performance.now() };
         const s = { author: String(msg.authorId || 'anon'), tool:(msg.tool||'pen'), color: msg.color || '#000', sizeCss: Number(msg.size || 4), sizeDev, points: [p], ended: false, leadDrawn: false };
-        strokes.set(msg.id, s);
+        strokes.set(id, s);
         const lay = getLayer(s.author).ctx;
         lay.globalCompositeOperation = (s.tool === 'eraser') ? 'destination-out' : 'source-over';
         lay.beginPath(); lay.fillStyle = s.color; lay.arc(p.x, p.y, s.sizeDev/2, 0, Math.PI*2); lay.fill();
         return;
       }
-      const id = String(msg.id || '');
       const s = strokes.get(id); if (!s) return;
-      if (msg.phase === 'point') {
+      if (phase === 'point') {
         const p = { x: msg.nx * getW(), y: msg.ny * getH(), time: performance.now() };
         const last = s.points[s.points.length - 1];
         const dx = p.x - last.x, dy = p.y - last.y;
         if (dx * dx + dy * dy < DIST_THRESH_SQ) return;
         s.points.push(p); return;
       }
-      if (msg.phase === 'end') { s.ended = true; return; }
+      if (phase === 'end') { s.ended = true; return; }
     }
 
     function process() {

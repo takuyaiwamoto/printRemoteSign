@@ -452,6 +452,7 @@
     try { es = new EventSource(url); } catch(_) { return; }
     es.addEventListener('stroke', (ev) => {
       try {
+        if (wsReady) return; // avoid二重取得: sender-role WSが生きていればSSEは無視
         const msg = JSON.parse(ev.data);
         if (msg.authorId && msg.authorId === AUTHOR_ID) return;
         if (!msg || msg.type !== 'stroke') return;
