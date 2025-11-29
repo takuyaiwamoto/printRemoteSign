@@ -398,6 +398,8 @@ transport.onmessage = (msg) => {
       let msg=null; try { msg = JSON.parse(typeof ev.data==='string'?ev.data:'null'); } catch(_) {}
       if (!msg || !msg.type) return;
       try { console.log('[sender(esm)] listenWS message', msg.type); } catch(_) {}
+      // If sender-role WS is active, skip strokes from receiver-role WS to avoid duplicates
+      if (msg.type === 'stroke' && transport?.wsReadyFlag) return;
       if (msg.type === 'stroke') { if (msg.authorId && msg.authorId === AUTHOR_ID) return; try { if (msg.phase==='start'||msg.phase==='end') console.log('[sender(esm)] listenWS stroke', msg.phase, {id:msg.id, author:msg.authorId}); } catch(_) {} otherEngine?.handle?.(msg); return; }
       if (msg.type === 'clear') { try { cm.clear(); } catch(_) {} otherEngine?.clearAll?.(); compositeOthers(); return; }
       if (msg.type === 'clearMine') { const { authorId } = msg; otherEngine?.clearAuthor?.(authorId); compositeOthers(); return; }

@@ -533,6 +533,8 @@
         let msg = null; try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : 'null'); } catch(_) {}
         if (!msg || !msg.type) return;
         try { console.log('[sender(main)] listenWS message', msg.type); } catch(_) {}
+        // If sender-role WS is active, skip strokes from receiver-role WS to avoid duplicates
+        if (msg.type === 'stroke' && wsReady) return;
         if (msg.type === 'clear') {
           // 背景は維持し、描画のみ消す
           try { selfLayer.ctx.clearRect(0,0,selfLayer.canvas.width,selfLayer.canvas.height); } catch(_) {}
