@@ -125,6 +125,8 @@
       .capture-wrap.is-active .capture-controls {
         display: none;
       }
+      /* Hide overlay toggle button (functionality remains available via programmatic trigger) */
+      #btn-overlay-toggle { display: none !important; }
     </style>
   </head>
   <body>
@@ -182,6 +184,8 @@
       const captureReselectBtn = document.getElementById('btn-capture-reselect');
       const captureStopBtn = document.getElementById('btn-capture-stop');
       const captureCtx = captureCanvas ? captureCanvas.getContext('2d') : null;
+      const btnWrap = document.querySelector('.btns');
+      let buttonsLockedHidden = false; // after clear we keep buttons hidden until reload
       let captureStream = null;
       let captureVideo = null;
       let captureAnim = null;
@@ -237,7 +241,8 @@
         overlayRunning = true;
         overlayActive = true;
         updateOverlayToggleButton();
-        document.querySelector('.btns')?.classList.remove('hidden');
+        if (!buttonsLockedHidden) btnWrap?.classList.remove('hidden');
+        else btnWrap?.classList.add('hidden');
         setAlpha(0.5);
         try { window.OverlayApi?.setPassThrough?.(false); } catch (_) {}
         if (preTimer) { clearInterval(preTimer); preTimer = null; }
@@ -421,7 +426,8 @@
         endOverlaySession({ animate: false, suppressCenterReveal: true });
         // 背景を完全透明にしてボタンも隠す。中央に「透明中」を表示
         setAlpha(0);
-        document.querySelector('.btns')?.classList.add('hidden');
+        buttonsLockedHidden = true; // keep buttons hidden until reload
+        btnWrap?.classList.add('hidden');
         center?.classList.remove('hidden');
         // 初期状態: メッセージ表示、カウント非表示
         try { centerMsg?.classList.remove('hidden'); preCount?.classList.add('hidden'); } catch(_) {}
