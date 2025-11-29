@@ -167,25 +167,20 @@ canvas {
   }
   .side-tools .colors { grid-area: colors; }
   .side-tools .sizes  { grid-area: sizes; }
-  .side-tools .group { justify-items: start; }
+.side-tools .group { justify-items: start; }
   .side-tools .actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(96px, auto));
-    grid-template-areas:
-      "start send"
-      "clear eraser";
     gap: 10px;
     justify-content: start;
     position: sticky;
     top: 38vh; /* 画面中段付近に固定 */
     }
   .action-btn { width: 96px; }
-  /* Grid placement by id to realize 2x2 order: 上: 開始 送る / 下: 全消し 消しゴム */
-  #btn-overlay-start { grid-area: start; }
-  #btn-send { grid-area: send; }
-  #btn-clear-all { grid-area: clear; }
-  #btn-eraser { grid-area: eraser; }
 }
+
+/* Hide start/stop button visually (functionality still available programmatically) */
+#btn-overlay-start { display: none !important; }
 
 /* --- Button pulse cues (start/send) --- */
 @keyframes pulseBlue {
